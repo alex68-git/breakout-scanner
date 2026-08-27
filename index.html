@@ -1,0 +1,3708 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>Bybit Breakout Scanner</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+
+    margin: 0;
+    padding: 15px;
+
+    background: #0b0e11;
+    color: #eaecef;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        sans-serif;
+}
+
+
+/* =========================
+   HEADER
+========================= */
+
+.header {
+
+    background: #1e2329;
+
+    padding: 15px;
+
+    border-radius: 12px;
+
+    margin-bottom: 15px;
+}
+
+h1 {
+
+    font-size: 20px;
+
+    margin: 0 0 15px 0;
+}
+
+
+/* =========================
+   CONTROLS
+========================= */
+
+.controls {
+
+    display: flex;
+
+    gap: 8px;
+
+    flex-wrap: wrap;
+
+    margin-bottom: 12px;
+}
+
+button,
+select {
+
+    border: none;
+
+    border-radius: 8px;
+
+    padding: 10px 14px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+button {
+
+    background: #f7931a;
+
+    color: #1e2329;
+}
+
+button.stop {
+
+    background: #e74c3c;
+
+    color: white;
+}
+
+button.clear {
+
+    background: #555;
+
+    color: white;
+}
+
+select {
+
+    background: #2b3139;
+
+    color: white;
+}
+
+
+/* =========================
+   STATUS
+========================= */
+
+.status {
+
+    color: #848e9c;
+
+    font-size: 13px;
+
+    margin-top: 8px;
+}
+
+
+/* =========================
+   STATS
+========================= */
+
+.stats {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, 1fr);
+
+    gap: 8px;
+
+    margin-top: 12px;
+}
+
+.stat {
+
+    background: #161a1e;
+
+    border-radius: 8px;
+
+    padding: 9px;
+
+    text-align: center;
+
+    font-size: 11px;
+}
+
+.stat-value {
+
+    display: block;
+
+    font-size: 15px;
+
+    font-weight: bold;
+
+    margin-top: 4px;
+}
+
+
+/* =========================
+   SIGNALS
+========================= */
+
+.section-title {
+
+    color: #848e9c;
+
+    font-size: 14px;
+
+    margin: 15px 0 8px;
+}
+
+.signals {
+
+    height: 70vh;
+
+    min-height: 400px;
+
+    overflow-y: auto;
+}
+
+
+/* =========================
+   SIGNAL CARD
+========================= */
+
+.signal {
+
+    background: #1e2329;
+
+    border-radius: 11px;
+
+    padding: 13px;
+
+    margin-bottom: 9px;
+
+    border-left: 5px solid #555;
+}
+
+.signal.long {
+
+    border-left-color: #27ae60;
+}
+
+.signal.short {
+
+    border-left-color: #e74c3c;
+}
+
+
+/* =========================
+   TOP
+========================= */
+
+.signal-top {
+
+    display: flex;
+
+    justify-content:
+        space-between;
+
+    align-items: center;
+}
+
+.symbol {
+
+    font-size: 17px;
+
+    font-weight: bold;
+}
+
+.direction {
+
+    font-weight: bold;
+
+    font-size: 14px;
+}
+
+
+/* =========================
+   SCORE
+========================= */
+
+.score {
+
+    font-size: 22px;
+
+    font-weight: bold;
+
+    margin-top: 6px;
+}
+
+
+/* =========================
+   ENTRY
+========================= */
+
+.entry-box {
+
+    margin-top: 10px;
+
+    background: #161a1e;
+
+    padding: 12px;
+
+    border-radius: 9px;
+}
+
+.entry-title {
+
+    color: #848e9c;
+
+    font-size: 11px;
+}
+
+.entry-price {
+
+    font-size: 22px;
+
+    font-weight: bold;
+
+    margin-top: 3px;
+}
+
+
+/* =========================
+   DATA
+========================= */
+
+.data-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, 1fr);
+
+    gap: 7px;
+
+    margin-top: 10px;
+}
+
+.data-box {
+
+    background: #161a1e;
+
+    padding: 8px;
+
+    border-radius: 7px;
+
+    font-size: 11px;
+
+    color: #848e9c;
+}
+
+.data-box strong {
+
+    display: block;
+
+    color: #eaecef;
+
+    font-size: 13px;
+
+    margin-top: 3px;
+}
+
+
+/* =========================
+   REASON
+========================= */
+
+.reason {
+
+    margin-top: 9px;
+
+    padding: 8px;
+
+    border-radius: 7px;
+
+    background: #161a1e;
+
+    font-size: 12px;
+
+    line-height: 1.5;
+}
+
+
+/* =========================
+   EMPTY
+========================= */
+
+.empty {
+
+    text-align: center;
+
+    color: #848e9c;
+
+    padding: 60px 15px;
+}
+
+
+/* =========================
+   COLORS
+========================= */
+
+.green {
+
+    color: #27ae60;
+}
+
+.red {
+
+    color: #e74c3c;
+}
+
+.orange {
+
+    color: #f7931a;
+}
+
+.blue {
+
+    color: #3498db;
+}
+
+.gray {
+
+    color: #848e9c;
+}
+
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 600px) {
+
+    .stats {
+
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+    .signals {
+
+        height: 65vh;
+    }
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+
+<div class="header">
+
+    <h1>
+        🚀 Bybit Breakout Scanner
+    </h1>
+
+
+    <div class="controls">
+
+        <button onclick="startScanner()">
+            ▶ Запустить
+        </button>
+
+
+        <button
+            class="stop"
+            onclick="stopScanner()">
+
+            ⏹ Стоп
+
+        </button>
+
+
+        <button
+            class="clear"
+            onclick="clearSignals()">
+
+            🗑 Очистить
+
+        </button>
+
+    </div>
+
+
+    <div class="controls">
+
+        <label>
+
+            Период уровня:
+
+            <select id="levelPeriod">
+
+                <option value="12">
+                    1 час
+                </option>
+
+                <option value="24"
+                        selected>
+                    2 часа
+                </option>
+
+                <option value="36">
+                    3 часа
+                </option>
+
+                <option value="72">
+                    6 часов
+                </option>
+
+            </select>
+
+        </label>
+
+
+        <label>
+
+            Минимальный Score:
+
+            <select id="minScore">
+
+                <option value="60">
+                    60
+                </option>
+
+                <option value="70"
+                        selected>
+                    70
+                </option>
+
+                <option value="80">
+                    80
+                </option>
+
+            </select>
+
+        </label>
+
+    </div>
+
+
+    <div class="status">
+
+        Статус:
+
+        <span id="status">
+            Остановлен
+        </span>
+
+    </div>
+
+
+    <div class="stats">
+
+
+        <div class="stat">
+
+            TOP 100
+
+            <span
+                id="coinCount"
+                class="stat-value">
+
+                0
+
+            </span>
+
+        </div>
+
+
+        <div class="stat">
+
+            WS
+
+            <span
+                id="wsStatus"
+                class="stat-value">
+
+                OFF
+
+            </span>
+
+        </div>
+
+
+        <div class="stat">
+
+            Уровней
+
+            <span
+                id="levelCount"
+                class="stat-value">
+
+                0
+
+            </span>
+
+        </div>
+
+
+        <div class="stat">
+
+            Сигналов
+
+            <span
+                id="signalCount"
+                class="stat-value">
+
+                0
+
+            </span>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<div class="section-title">
+
+    🔥 TOP-5 вероятных пробоев
+
+</div>
+
+
+<div
+    id="signals"
+    class="signals">
+
+    <div
+        class="empty">
+
+        Запусти сканер.
+
+        <br><br>
+
+        Он будет искать:
+
+        <br>
+
+        🟢 пробой сопротивления → LONG
+
+        <br>
+
+        🔴 пробой поддержки → SHORT
+
+    </div>
+
+</div>
+
+
+<script>
+
+
+/* =====================================================
+   CONFIG
+===================================================== */
+
+
+/*
+ * TOP-100 монет
+ */
+
+const MAX_SYMBOLS = 100;
+
+
+/*
+ * Показываем только TOP-5
+ */
+
+const MAX_SIGNALS = 5;
+
+
+/*
+ * Свечи для поиска уровней
+ *
+ * 5 минут.
+ */
+
+const KLINE_INTERVAL = "5";
+
+
+/*
+ * Сколько свечей держим
+ */
+
+const MAX_KLINES = 100;
+
+
+/*
+ * Как часто анализируем
+ */
+
+const ANALYSIS_INTERVAL = 1000;
+
+
+/*
+ * Как часто обновляем UI
+ */
+
+const UI_INTERVAL = 1000;
+
+
+/*
+ * Обновляем TOP каждые 5 минут
+ */
+
+const SYMBOL_REFRESH =
+    5 * 60 * 1000;
+
+
+/*
+ * Сколько времени сигнал живёт
+ */
+
+const SIGNAL_EXPIRY =
+    15000;
+
+
+/*
+ * Максимальное расстояние
+ * текущей цены до уровня.
+ *
+ * 1.5%
+ */
+
+const MAX_LEVEL_DISTANCE =
+    0.015;
+
+
+/*
+ * Минимальное расстояние
+ * чтобы не считать шумом.
+ */
+
+const MIN_LEVEL_DISTANCE =
+    0.0005;
+
+
+/*
+ * Окно агрессивных сделок.
+ *
+ * 30 секунд.
+ */
+
+const TRADE_WINDOW =
+    30000;
+
+
+/*
+ * Минимум сделок для оценки
+ */
+
+const MIN_TRADES =
+    5;
+
+
+/*
+ * Heartbeat Bybit.
+ *
+ * По документации рекомендуется
+ * ping каждые 20 секунд.
+ */
+
+const PING_INTERVAL =
+    20000;
+
+
+/*
+ * Переподключение.
+ */
+
+const RECONNECT_BASE =
+    2000;
+
+const RECONNECT_MAX =
+    15000;
+
+
+/* =====================================================
+   STATE
+===================================================== */
+
+let ws = null;
+
+let running = false;
+
+let reconnectTimer = null;
+
+let symbolRefreshTimer = null;
+
+let analysisTimer = null;
+
+let uiTimer = null;
+
+let pingTimer = null;
+
+let reconnectAttempts = 0;
+
+
+/*
+ * TOP
+ */
+
+const symbols = [];
+
+const symbolRanks = new Map();
+
+
+/*
+ * KLINES
+ */
+
+const klines = new Map();
+
+
+/*
+ * Последняя цена
+ */
+
+const prices = new Map();
+
+
+/*
+ * Агрессивные сделки
+ */
+
+const trades = new Map();
+
+
+/*
+ * Сигналы
+ */
+
+const signals = new Map();
+
+
+/*
+ * Обнаруженные уровни
+ */
+
+const levels = new Map();
+
+
+/* =====================================================
+   DOM
+===================================================== */
+
+const statusEl =
+    document.getElementById(
+        "status"
+    );
+
+const wsEl =
+    document.getElementById(
+        "wsStatus"
+    );
+
+const coinCountEl =
+    document.getElementById(
+        "coinCount"
+    );
+
+const levelCountEl =
+    document.getElementById(
+        "levelCount"
+    );
+
+const signalCountEl =
+    document.getElementById(
+        "signalCount"
+    );
+
+const signalsEl =
+    document.getElementById(
+        "signals"
+    );
+
+
+/* =====================================================
+   HELPERS
+===================================================== */
+
+function now() {
+
+    return Date.now();
+
+}
+
+
+function money(value) {
+
+    return Number(value)
+        .toLocaleString(
+            "en-US",
+            {
+                maximumFractionDigits: 0
+            }
+        );
+
+}
+
+
+function priceFormat(value) {
+
+    const n =
+        Number(value);
+
+
+    if (!Number.isFinite(n))
+        return "-";
+
+
+    if (n >= 1000)
+        return n.toFixed(2);
+
+
+    if (n >= 100)
+        return n.toFixed(3);
+
+
+    if (n >= 1)
+        return n.toFixed(4);
+
+
+    if (n >= 0.01)
+        return n.toFixed(5);
+
+
+    return n.toFixed(8);
+
+}
+
+
+function percent(value) {
+
+    return (
+        Number(value) * 100
+    ).toFixed(2) + "%";
+
+}
+
+
+function clamp(
+    value,
+    min,
+    max
+) {
+
+    return Math.max(
+        min,
+        Math.min(
+            max,
+            value
+        )
+    );
+
+}
+
+
+/* =====================================================
+   CREATE SYMBOL STORAGE
+===================================================== */
+
+function initSymbol(
+    symbol
+) {
+
+    if (!klines.has(symbol)) {
+
+        klines.set(
+            symbol,
+            []
+        );
+
+    }
+
+
+    if (!trades.has(symbol)) {
+
+        trades.set(
+            symbol,
+            []
+        );
+
+    }
+
+}
+
+
+/* =====================================================
+   PROCESS KLINE
+===================================================== */
+
+function processKline(
+    symbol,
+    data
+) {
+
+    if (!Array.isArray(data))
+        return;
+
+
+    initSymbol(symbol);
+
+
+    const list =
+        klines.get(symbol);
+
+
+    for (
+        const candle
+        of data
+    ) {
+
+        const item = {
+
+            start:
+                Number(candle.start),
+
+            end:
+                Number(candle.end),
+
+            open:
+                Number(candle.open),
+
+            high:
+                Number(candle.high),
+
+            low:
+                Number(candle.low),
+
+            close:
+                Number(candle.close),
+
+            volume:
+                Number(candle.volume),
+
+            turnover:
+                Number(candle.turnover),
+
+            confirm:
+                Boolean(candle.confirm)
+
+        };
+
+
+        prices.set(
+            symbol,
+            item.close
+        );
+
+
+        /*
+         * Обновляем существующую
+         * свечу либо добавляем новую.
+         */
+
+        const index =
+            list.findIndex(
+                x =>
+                    x.start ===
+                    item.start
+            );
+
+
+        if (index >= 0) {
+
+            list[index] =
+                item;
+
+        } else {
+
+            list.push(
+                item
+            );
+
+        }
+
+    }
+
+
+    /*
+     * Сортировка.
+     */
+
+    list.sort(
+        (a, b) =>
+            a.start -
+            b.start
+    );
+
+
+    /*
+     * Ограничиваем память.
+     */
+
+    while (
+        list.length >
+        MAX_KLINES
+    ) {
+
+        list.shift();
+
+    }
+
+}
+
+
+/* =====================================================
+   PROCESS TRADE
+===================================================== */
+
+function processTrade(
+    data
+) {
+
+    if (!Array.isArray(data))
+        return;
+
+
+    for (
+        const trade
+        of data
+    ) {
+
+        const symbol =
+            trade.s;
+
+        const price =
+            Number(trade.p);
+
+        const qty =
+            Number(trade.v);
+
+        const side =
+            trade.S;
+
+        const timestamp =
+            Number(trade.T) ||
+            now();
+
+
+        if (
+            !symbol ||
+            !Number.isFinite(price) ||
+            !Number.isFinite(qty)
+        )
+            continue;
+
+
+        prices.set(
+            symbol,
+            price
+        );
+
+
+        if (!trades.has(symbol)) {
+
+            trades.set(
+                symbol,
+                []
+            );
+
+        }
+
+
+        const list =
+            trades.get(symbol);
+
+
+        list.push({
+
+            time:
+                timestamp,
+
+            side:
+                side,
+
+            price:
+                price,
+
+            value:
+                price * qty
+
+        });
+
+
+        /*
+         * Удаляем старые.
+         */
+
+        const cutoff =
+            now() -
+            TRADE_WINDOW;
+
+
+        while (
+            list.length &&
+            list[0].time <
+            cutoff
+        ) {
+
+            list.shift();
+
+        }
+
+    }
+
+}
+
+
+/* =====================================================
+   TRADE FLOW
+===================================================== */
+
+function getTradeFlow(
+    symbol
+) {
+
+    const list =
+        trades.get(symbol) ||
+        [];
+
+
+    const cutoff =
+        now() -
+        TRADE_WINDOW;
+
+
+    let buy = 0;
+
+    let sell = 0;
+
+    let count = 0;
+
+
+    for (
+        let i =
+            list.length - 1;
+
+        i >= 0;
+
+        i--
+    ) {
+
+        const trade =
+            list[i];
+
+
+        if (
+            trade.time <
+            cutoff
+        )
+            break;
+
+
+        count++;
+
+
+        if (
+            trade.side ===
+            "Buy"
+        ) {
+
+            buy +=
+                trade.value;
+
+        } else {
+
+            sell +=
+                trade.value;
+
+        }
+
+    }
+
+
+    const total =
+        buy + sell;
+
+
+    let imbalance = 0;
+
+
+    if (
+        total > 0
+    ) {
+
+        imbalance =
+            (
+                buy -
+                sell
+            ) /
+            total;
+
+    }
+
+
+    return {
+
+        buy,
+
+        sell,
+
+        total,
+
+        imbalance,
+
+        count
+
+    };
+
+}
+
+
+/* =====================================================
+   ATR
+===================================================== */
+
+function getATR(
+    candles,
+    period = 14
+) {
+
+    if (
+        candles.length <
+        period + 1
+    )
+        return 0;
+
+
+    const recent =
+        candles.slice(
+            -(period + 1)
+        );
+
+
+    let sum = 0;
+
+
+    for (
+        let i = 1;
+
+        i < recent.length;
+
+        i++
+    ) {
+
+        const current =
+            recent[i];
+
+        const previous =
+            recent[i - 1];
+
+
+        const tr =
+            Math.max(
+
+                current.high -
+                current.low,
+
+                Math.abs(
+                    current.high -
+                    previous.close
+                ),
+
+                Math.abs(
+                    current.low -
+                    previous.close
+                )
+
+            );
+
+
+        sum += tr;
+
+    }
+
+
+    return sum / period;
+
+}
+
+
+/* =====================================================
+   FIND LOCAL EXTREMES
+===================================================== */
+
+function findCandidateLevels(
+    symbol
+) {
+
+    const candles =
+        klines.get(symbol) ||
+        [];
+
+
+    if (
+        candles.length <
+        20
+    )
+        return [];
+
+
+    const period =
+        parseInt(
+            document
+                .getElementById(
+                    "levelPeriod"
+                )
+                .value
+        );
+
+
+    const data =
+        candles.slice(
+            -period
+        );
+
+
+    if (
+        data.length <
+        10
+    )
+        return [];
+
+
+    const currentPrice =
+        prices.get(symbol) ||
+        data[data.length - 1].close;
+
+
+    if (
+        !currentPrice
+    )
+        return [];
+
+
+    const atr =
+        getATR(
+            data
+        );
+
+
+    if (
+        !atr
+    )
+        return [];
+
+
+    const candidates = [];
+
+
+    /*
+     * Локальные HIGH
+     *
+     * Используем pivot:
+     *
+     * candle high должен быть
+     * выше нескольких соседних.
+     */
+
+    for (
+        let i = 2;
+
+        i < data.length - 2;
+
+        i++
+    ) {
+
+        const c =
+            data[i];
+
+
+        if (
+            c.high >=
+            data[i - 1].high &&
+
+            c.high >=
+            data[i - 2].high &&
+
+            c.high >=
+            data[i + 1].high &&
+
+            c.high >=
+            data[i + 2].high
+        ) {
+
+            candidates.push({
+
+                type:
+                    "RESISTANCE",
+
+                price:
+                    c.high,
+
+                candle:
+                    c,
+
+                index:
+                    i
+
+            });
+
+        }
+
+    }
+
+
+    /*
+     * Локальные LOW
+     */
+
+    for (
+        let i = 2;
+
+        i < data.length - 2;
+
+        i++
+    ) {
+
+        const c =
+            data[i];
+
+
+        if (
+            c.low <=
+            data[i - 1].low &&
+
+            c.low <=
+            data[i - 2].low &&
+
+            c.low <=
+            data[i + 1].low &&
+
+            c.low <=
+            data[i + 2].low
+        ) {
+
+            candidates.push({
+
+                type:
+                    "SUPPORT",
+
+                price:
+                    c.low,
+
+                candle:
+                    c,
+
+                index:
+                    i
+
+            });
+
+        }
+
+    }
+
+
+    /*
+     * Фильтруем слишком далёкие.
+     */
+
+    return candidates.filter(
+        level => {
+
+            const distance =
+                Math.abs(
+                    level.price -
+                    currentPrice
+                ) /
+                currentPrice;
+
+
+            return (
+                distance >=
+                MIN_LEVEL_DISTANCE &&
+
+                distance <=
+                MAX_LEVEL_DISTANCE
+            );
+
+        }
+    );
+
+}
+
+
+/* =====================================================
+   MERGE NEAR LEVELS
+===================================================== */
+
+function mergeLevels(
+    candidates,
+    atr
+) {
+
+    const result = [];
+
+
+    /*
+     * Чем волатильнее монета,
+     * тем шире зона уровня.
+     */
+
+    const tolerance =
+        Math.max(
+            atr * 0.35,
+            0.0008
+        );
+
+
+    const sorted =
+        [...candidates]
+            .sort(
+                (a, b) =>
+                    a.price -
+                    b.price
+            );
+
+
+    for (
+        const candidate
+        of sorted
+    ) {
+
+        let existing = null;
+
+
+        for (
+            const level
+            of result
+        ) {
+
+            if (
+                level.type !==
+                candidate.type
+            )
+                continue;
+
+
+            if (
+                Math.abs(
+                    level.price -
+                    candidate.price
+                ) <=
+                tolerance
+            ) {
+
+                existing =
+                    level;
+
+                break;
+
+            }
+
+        }
+
+
+        if (
+            existing
+        ) {
+
+            /*
+             * Усредняем уровень.
+             */
+
+            existing.price =
+                (
+                    existing.price *
+                    existing.touches +
+
+                    candidate.price
+                ) /
+                (
+                    existing.touches +
+                    1
+                );
+
+
+            existing.touches++;
+
+
+            existing.lastIndex =
+                Math.max(
+                    existing.lastIndex,
+                    candidate.index
+                );
+
+
+        } else {
+
+            result.push({
+
+                type:
+                    candidate.type,
+
+                price:
+                    candidate.price,
+
+                touches:
+                    1,
+
+                firstIndex:
+                    candidate.index,
+
+                lastIndex:
+                    candidate.index
+
+            });
+
+        }
+
+    }
+
+
+    return result;
+
+}
+
+
+/* =====================================================
+   LEVEL SCORE
+===================================================== */
+
+function scoreLevel(
+    symbol,
+    level
+) {
+
+    const candles =
+        klines.get(symbol) ||
+        [];
+
+
+    if (
+        candles.length <
+        20
+    )
+        return null;
+
+
+    const currentPrice =
+        prices.get(symbol) ||
+        candles[candles.length - 1]
+            .close;
+
+
+    const atr =
+        getATR(
+            candles.slice(-30)
+        );
+
+
+    if (
+        !currentPrice ||
+        !atr
+    )
+        return null;
+
+
+    /*
+     * Расстояние.
+     */
+
+    const distance =
+        Math.abs(
+            level.price -
+            currentPrice
+        ) /
+        currentPrice;
+
+
+    if (
+        distance >
+        MAX_LEVEL_DISTANCE
+    )
+        return null;
+
+
+    /*
+     * Проверяем повторные
+     * касания уровня.
+     */
+
+    let touches = 0;
+
+    let rejectionVolume = 0;
+
+
+    const tolerance =
+        Math.max(
+            atr * 0.30,
+            currentPrice *
+            0.0008
+        );
+
+
+    for (
+        const candle
+        of candles
+    ) {
+
+        if (
+            Math.abs(
+                candle.high -
+                level.price
+            ) <=
+            tolerance ||
+
+            Math.abs(
+                candle.low -
+                level.price
+            ) <=
+            tolerance
+        ) {
+
+            touches++;
+
+
+            rejectionVolume +=
+                candle.turnover;
+
+        }
+
+    }
+
+
+    /*
+     * Нужен минимум
+     * 2 касания.
+     */
+
+    if (
+        touches <
+        2
+    )
+        return null;
+
+
+    /*
+     * Последние свечи.
+     */
+
+    const recent =
+        candles.slice(
+            -6
+        );
+
+
+    if (
+        recent.length <
+        5
+    )
+        return null;
+
+
+    /*
+     * Импульс.
+     */
+
+    const first =
+        recent[0].close;
+
+    const last =
+        recent[recent.length - 1]
+            .close;
+
+
+    const momentum =
+        (
+            last -
+            first
+        ) /
+        first;
+
+
+    /*
+     * Направление.
+     */
+
+    let direction;
+
+
+    if (
+        level.type ===
+        "RESISTANCE"
+    ) {
+
+        direction =
+            "LONG";
+
+    } else {
+
+        direction =
+            "SHORT";
+
+    }
+
+
+    /*
+     * Насколько цена уже
+     * приблизилась к уровню.
+     */
+
+    let approach = 0;
+
+
+    if (
+        level.type ===
+        "RESISTANCE"
+    ) {
+
+        approach =
+            clamp(
+                momentum * 800,
+                -20,
+                25
+            );
+
+    } else {
+
+        approach =
+            clamp(
+                -momentum * 800,
+                -20,
+                25
+            );
+
+    }
+
+
+    /*
+     * Trade flow.
+     */
+
+    const flow =
+        getTradeFlow(symbol);
+
+
+    let flowScore = 0;
+
+
+    if (
+        flow.count >=
+        MIN_TRADES
+    ) {
+
+        if (
+            direction ===
+            "LONG"
+        ) {
+
+            flowScore =
+                clamp(
+                    flow.imbalance *
+                    40,
+                    -20,
+                    25
+                );
+
+        } else {
+
+            flowScore =
+                clamp(
+                    -flow.imbalance *
+                    40,
+                    -20,
+                    25
+                );
+
+        }
+
+    }
+
+
+    /*
+     * Чем ближе к уровню,
+     * тем выше интерес.
+     *
+     * Но не даём максимум
+     * слишком рано.
+     */
+
+    const distanceScore =
+        clamp(
+            (
+                1 -
+                distance /
+                MAX_LEVEL_DISTANCE
+            ) * 20,
+
+            0,
+
+            20
+        );
+
+
+    /*
+     * Касания.
+     *
+     * 2 = немного
+     * 3 = хорошо
+     * 4+ = очень хорошо
+     */
+
+    const touchScore =
+        clamp(
+            touches * 6,
+            0,
+            24
+        );
+
+
+    /*
+     * Свежесть уровня.
+     */
+
+    const lastIndex =
+        level.lastIndex;
+
+
+    const ageCandles =
+        candles.length -
+        1 -
+        lastIndex;
+
+
+    const freshnessScore =
+        clamp(
+            15 -
+            ageCandles * 1.5,
+            0,
+            15
+        );
+
+
+    /*
+     * Проверяем объём.
+     */
+
+    const avgTurnover =
+        candles
+            .slice(-20)
+            .reduce(
+                (
+                    sum,
+                    candle
+                ) =>
+                    sum +
+                    candle.turnover,
+                0
+            ) /
+        Math.min(
+            20,
+            candles.length
+        );
+
+
+    const recentTurnover =
+        candles
+            .slice(-3)
+            .reduce(
+                (
+                    sum,
+                    candle
+                ) =>
+                    sum +
+                    candle.turnover,
+                0
+            ) / 3;
+
+
+    let volumeScore = 0;
+
+
+    if (
+        avgTurnover > 0
+    ) {
+
+        const volumeRatio =
+            recentTurnover /
+            avgTurnover;
+
+
+        volumeScore =
+            clamp(
+                (
+                    volumeRatio -
+                    0.8
+                ) * 15,
+
+                -10,
+
+                15
+            );
+
+    }
+
+
+    /*
+     * Базовый score.
+     */
+
+    let score =
+        20 +
+        distanceScore +
+        touchScore +
+        freshnessScore +
+        approach +
+        flowScore +
+        volumeScore;
+
+
+    /*
+     * Негативный фильтр:
+     *
+     * если импульс явно
+     * идёт против будущего
+     * пробоя — сильно уменьшаем.
+     */
+
+    if (
+        direction === "LONG" &&
+        momentum < -0.004
+    ) {
+
+        score -= 15;
+
+    }
+
+
+    if (
+        direction === "SHORT" &&
+        momentum > 0.004
+    ) {
+
+        score -= 15;
+
+    }
+
+
+    /*
+     * Если цена уже практически
+     * пересекла уровень —
+     * это уже не "предстоящий"
+     * пробой.
+     */
+
+    const alreadyBroken =
+        direction === "LONG"
+
+            ? currentPrice >
+              level.price * 1.0015
+
+            : currentPrice <
+              level.price * 0.9985;
+
+
+    if (
+        alreadyBroken
+    )
+        return null;
+
+
+    /*
+     * Нормализуем.
+     */
+
+    score =
+        clamp(
+            Math.round(score),
+            0,
+            100
+        );
+
+
+    /*
+     * Цена входа.
+     *
+     * Небольшой буфер
+     * за уровнем.
+     */
+
+    let entry;
+
+
+    if (
+        direction ===
+        "LONG"
+    ) {
+
+        entry =
+            level.price +
+            Math.max(
+                atr * 0.08,
+                level.price *
+                0.0004
+            );
+
+    } else {
+
+        entry =
+            level.price -
+            Math.max(
+                atr * 0.08,
+                level.price *
+                0.0004
+            );
+
+    }
+
+
+    return {
+
+        symbol,
+
+        rank:
+            symbolRanks.get(symbol),
+
+        direction,
+
+        level:
+            level.price,
+
+        entry,
+
+        score,
+
+        touches,
+
+        distance,
+
+        momentum,
+
+        flow,
+
+        volumeRatio:
+            avgTurnover > 0
+                ? recentTurnover /
+                  avgTurnover
+                : 0,
+
+        ageCandles,
+
+        atr
+
+    };
+
+}
+
+
+/* =====================================================
+   ANALYZE SYMBOL
+===================================================== */
+
+function analyzeSymbol(
+    symbol
+) {
+
+    const candles =
+        klines.get(symbol) ||
+        [];
+
+
+    if (
+        candles.length <
+        20
+    )
+        return [];
+
+
+    const atr =
+        getATR(
+            candles.slice(-30)
+        );
+
+
+    if (
+        !atr
+    )
+        return [];
+
+
+    const candidates =
+        findCandidateLevels(
+            symbol
+        );
+
+
+    const merged =
+        mergeLevels(
+            candidates,
+            atr
+        );
+
+
+    const results = [];
+
+
+    for (
+        const level
+        of merged
+    ) {
+
+        const scored =
+            scoreLevel(
+                symbol,
+                level
+            );
+
+
+        if (
+            scored
+        ) {
+
+            results.push(
+                scored
+            );
+
+        }
+
+    }
+
+
+    return results;
+
+}
+
+
+/* =====================================================
+   ANALYZE ALL
+===================================================== */
+
+function analyzeAll() {
+
+    if (!running)
+        return;
+
+
+    const all = [];
+
+
+    let totalLevels = 0;
+
+
+    for (
+        const symbol
+        of symbols
+    ) {
+
+        const result =
+            analyzeSymbol(
+                symbol
+            );
+
+
+        totalLevels +=
+            result.length;
+
+
+        all.push(
+            ...result
+        );
+
+    }
+
+
+    /*
+     * Убираем почти одинаковые
+     * сигналы одной монеты.
+     */
+
+    all.sort(
+        (a, b) =>
+            b.score -
+            a.score
+    );
+
+
+    const selected = [];
+
+
+    for (
+        const signal
+        of all
+    ) {
+
+        const duplicate =
+            selected.some(
+                x =>
+
+                    x.symbol ===
+                    signal.symbol &&
+
+                    x.direction ===
+                    signal.direction
+
+            );
+
+
+        if (
+            duplicate
+        )
+            continue;
+
+
+        selected.push(
+            signal
+        );
+
+
+        if (
+            selected.length >=
+            MAX_SIGNALS
+        )
+            break;
+
+    }
+
+
+    signals.clear();
+
+
+    for (
+        const signal
+        of selected
+    ) {
+
+        const key =
+            `${signal.symbol}_${signal.direction}`;
+
+
+        signals.set(
+            key,
+            {
+
+                ...signal,
+
+                updated:
+                    now()
+
+            }
+        );
+
+    }
+
+
+    levelCountEl.innerText =
+        totalLevels;
+
+}
+
+
+/* =====================================================
+   RENDER
+===================================================== */
+
+function renderSignals() {
+
+    const list =
+        [...signals.values()]
+            .sort(
+                (a, b) =>
+                    b.score -
+                    a.score
+            )
+            .slice(
+                0,
+                MAX_SIGNALS
+            );
+
+
+    signalCountEl.innerText =
+        list.length;
+
+
+    if (
+        list.length === 0
+    ) {
+
+        signalsEl.innerHTML = `
+
+            <div class="empty">
+
+                🔎 Ищем ближайшие
+                уровни...
+
+                <br><br>
+
+                Пока нет достаточно
+                сильной ситуации
+                для пробоя.
+
+            </div>
+
+        `;
+
+        return;
+
+    }
+
+
+    let html = "";
+
+
+    list.forEach(
+        (s, index) => {
+
+            const isLong =
+                s.direction ===
+                "LONG";
+
+
+            const directionClass =
+                isLong
+                    ? "long"
+                    : "short";
+
+
+            const icon =
+                isLong
+                    ? "🟢"
+                    : "🔴";
+
+
+            const levelType =
+                isLong
+                    ? "СОПРОТИВЛЕНИЕ"
+                    : "ПОДДЕРЖКА";
+
+
+            const flowText =
+                isLong
+
+                    ? (
+                        s.flow.imbalance >= 0
+                            ? "Покупатели давят"
+                            : "Пока сильнее продавцы"
+                    )
+
+                    : (
+                        s.flow.imbalance <= 0
+                            ? "Продавцы давят"
+                            : "Пока сильнее покупатели"
+                    );
+
+
+            html += `
+
+                <div
+                    class="signal ${directionClass}">
+
+
+                    <div
+                        class="signal-top">
+
+                        <div
+                            class="symbol">
+
+                            ${icon}
+
+                            #${index + 1}
+
+                            ${s.symbol}
+
+                            <span
+                                class="gray">
+
+                                TOP ${s.rank}
+
+                            </span>
+
+                        </div>
+
+
+                        <div
+                            class="direction">
+
+                            ${s.direction}
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="score">
+
+                        Score:
+                        ${s.score}/100
+
+                    </div>
+
+
+                    <div
+                        class="entry-box">
+
+                        <div
+                            class="entry-title">
+
+                            ЦЕНА ВХОДА ПОСЛЕ ПРОБОЯ
+
+                        </div>
+
+
+                        <div
+                            class="entry-price">
+
+                            ${priceFormat(
+                                s.entry
+                            )}
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="data-grid">
+
+
+                        <div
+                            class="data-box">
+
+                            Уровень
+
+                            <strong>
+
+                                ${priceFormat(
+                                    s.level
+                                )}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            Тип уровня
+
+                            <strong>
+
+                                ${levelType}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            До уровня
+
+                            <strong>
+
+                                ${percent(
+                                    s.distance
+                                )}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            Касаний
+
+                            <strong>
+
+                                ${s.touches}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            Импульс
+
+                            <strong>
+
+                                ${percent(
+                                    s.momentum
+                                )}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            BUY/SELL
+
+                            <strong>
+
+                                ${percent(
+                                    s.flow.imbalance
+                                )}
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            Объём
+
+                            <strong>
+
+                                ${s.volumeRatio
+                                    .toFixed(1)}x
+
+                            </strong>
+
+                        </div>
+
+
+                        <div
+                            class="data-box">
+
+                            TOP
+
+                            <strong>
+
+                                #${s.rank}
+
+                            </strong>
+
+                        </div>
+
+                    </div>
+
+
+                    <div
+                        class="reason">
+
+                        🎯 ${flowText}
+
+                        <br>
+
+                        📍 Уровень:
+
+                        ${priceFormat(
+                            s.level
+                        )}
+
+                        <br>
+
+                        🚀 Вход:
+
+                        ${priceFormat(
+                            s.entry
+                        )}
+
+                        <br>
+
+                        📊 Касаний уровня:
+
+                        ${s.touches}
+
+                    </div>
+
+
+                </div>
+
+            `;
+
+        }
+    );
+
+
+    signalsEl.innerHTML =
+        html;
+
+}
+
+
+/* =====================================================
+   WEBSOCKET SUBSCRIBE
+===================================================== */
+
+function subscribeAll() {
+
+    if (
+        !ws ||
+        ws.readyState !==
+        WebSocket.OPEN
+    )
+        return;
+
+
+    /*
+     * Bybit позволяет подписывать
+     * несколько public topics одним
+     * запросом.
+     */
+
+    const args = [];
+
+
+    for (
+        const symbol
+        of symbols
+    ) {
+
+        args.push(
+            `kline.${KLINE_INTERVAL}.${symbol}`
+        );
+
+        args.push(
+            `publicTrade.${symbol}`
+        );
+
+    }
+
+
+    /*
+     * Отправляем пакетами.
+     *
+     * Это уменьшает вероятность
+     * проблем с очень большим
+     * subscribe message.
+     */
+
+    const CHUNK =
+        40;
+
+
+    for (
+        let i = 0;
+
+        i < args.length;
+
+        i += CHUNK
+    ) {
+
+        const chunk =
+            args.slice(
+                i,
+                i + CHUNK
+            );
+
+
+        setTimeout(
+            () => {
+
+                if (
+                    ws &&
+                    ws.readyState ===
+                    WebSocket.OPEN
+                ) {
+
+                    ws.send(
+                        JSON.stringify({
+
+                            op:
+                                "subscribe",
+
+                            args:
+                                chunk
+
+                        })
+                    );
+
+                }
+
+            },
+
+            Math.floor(i / CHUNK) *
+            150
+
+        );
+
+    }
+
+}
+
+
+/* =====================================================
+   HEARTBEAT
+===================================================== */
+
+function startHeartbeat() {
+
+    stopHeartbeat();
+
+
+    pingTimer =
+        setInterval(
+            () => {
+
+                if (
+                    ws &&
+                    ws.readyState ===
+                    WebSocket.OPEN
+                ) {
+
+                    try {
+
+                        ws.send(
+                            JSON.stringify({
+
+                                op:
+                                    "ping"
+
+                            })
+                        );
+
+                    } catch (
+                        error
+                    ) {
+
+                        console.error(
+                            "Ping error:",
+                            error
+                        );
+
+                    }
+
+                }
+
+            },
+            PING_INTERVAL
+        );
+
+}
+
+
+/* =====================================================
+   STOP HEARTBEAT
+===================================================== */
+
+function stopHeartbeat() {
+
+    if (
+        pingTimer
+    ) {
+
+        clearInterval(
+            pingTimer
+        );
+
+        pingTimer = null;
+
+    }
+
+}
+
+
+/* =====================================================
+   CONNECT
+===================================================== */
+
+function connectWebSocket() {
+
+    if (!running)
+        return;
+
+
+    /*
+     * Закрываем старый socket.
+     */
+
+    if (ws) {
+
+        try {
+
+            ws.onclose =
+                null;
+
+            ws.close();
+
+        } catch (
+            error
+        ) {}
+
+        ws = null;
+
+    }
+
+
+    statusEl.innerText =
+        "Подключение к Bybit...";
+
+    statusEl.style.color =
+        "#f7931a";
+
+
+    ws =
+        new WebSocket(
+            "wss://stream.bybit.com/v5/public/linear"
+        );
+
+
+    ws.onopen = () => {
+
+        reconnectAttempts = 0;
+
+
+        wsEl.innerText =
+            "ON";
+
+        wsEl.className =
+            "stat-value green";
+
+
+        statusEl.innerText =
+            "Сканирование активно";
+
+        statusEl.style.color =
+            "#27ae60";
+
+
+        /*
+         * Важно:
+         * heartbeat запускаем только
+         * после успешного соединения.
+         */
+
+        startHeartbeat();
+
+
+        subscribeAll();
+
+    };
+
+
+    ws.onmessage =
+        event => {
+
+            try {
+
+                const data =
+                    JSON.parse(
+                        event.data
+                    );
+
+
+                /*
+                 * Pong.
+                 */
+
+                if (
+                    data.op ===
+                    "pong"
+                ) {
+
+                    return;
+
+                }
+
+
+                /*
+                 * Subscribe response.
+                 */
+
+                if (
+                    data.op ===
+                    "subscribe"
+                ) {
+
+                    return;
+
+                }
+
+
+                if (
+                    !data.topic
+                )
+                    return;
+
+
+                /*
+                 * KLINE
+                 */
+
+                if (
+                    data.topic
+                        .startsWith(
+                            "kline."
+                        )
+                ) {
+
+                    const parts =
+                        data.topic
+                            .split(
+                                "."
+                            );
+
+
+                    const symbol =
+                        parts[2];
+
+
+                    processKline(
+                        symbol,
+                        data.data
+                    );
+
+
+                    return;
+
+                }
+
+
+                /*
+                 * TRADE
+                 */
+
+                if (
+                    data.topic
+                        .startsWith(
+                            "publicTrade."
+                        )
+                ) {
+
+                    processTrade(
+                        data.data
+                    );
+
+                }
+
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "WS parse error:",
+                    error
+                );
+
+            }
+
+        };
+
+
+    ws.onerror =
+        error => {
+
+            console.error(
+                "WebSocket error:",
+                error
+            );
+
+
+            wsEl.innerText =
+                "ERROR";
+
+            wsEl.className =
+                "stat-value red";
+
+        };
+
+
+    ws.onclose =
+        () => {
+
+            stopHeartbeat();
+
+
+            wsEl.innerText =
+                "OFF";
+
+            wsEl.className =
+                "stat-value red";
+
+
+            if (!running)
+                return;
+
+
+            statusEl.innerText =
+                "Соединение потеряно. Переподключение...";
+
+            statusEl.style.color =
+                "#f7931a";
+
+
+            scheduleReconnect();
+
+        };
+
+}
+
+
+/* =====================================================
+   RECONNECT
+===================================================== */
+
+function scheduleReconnect() {
+
+    if (!running)
+        return;
+
+
+    if (
+        reconnectTimer
+    )
+        return;
+
+
+    reconnectAttempts++;
+
+
+    const delay =
+        Math.min(
+
+            RECONNECT_MAX,
+
+            RECONNECT_BASE *
+            Math.pow(
+                2,
+                reconnectAttempts - 1
+            )
+
+        );
+
+
+    reconnectTimer =
+        setTimeout(
+            () => {
+
+                reconnectTimer =
+                    null;
+
+
+                if (
+                    running
+                ) {
+
+                    connectWebSocket();
+
+                }
+
+            },
+            delay
+        );
+
+}
+
+
+/* =====================================================
+   LOAD TOP 100
+===================================================== */
+
+async function loadSymbols() {
+
+    try {
+
+        statusEl.innerText =
+            "Загрузка TOP-100...";
+
+        statusEl.style.color =
+            "#f7931a";
+
+
+        const response =
+            await fetch(
+
+                "https://api.bybit.com/v5/market/tickers?category=linear"
+
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                "HTTP " +
+                response.status
+            );
+
+        }
+
+
+        const json =
+            await response.json();
+
+
+        if (
+            json.retCode !== 0 ||
+            !json.result ||
+            !Array.isArray(
+                json.result.list
+            )
+        ) {
+
+            throw new Error(
+                "Invalid Bybit response"
+            );
+
+        }
+
+
+        const list =
+            json.result.list
+
+                /*
+                 * Только USDT.
+                 */
+
+                .filter(
+                    item =>
+
+                        item.symbol &&
+
+                        item.symbol
+                            .endsWith(
+                                "USDT"
+                            ) &&
+
+                        Number(
+                            item.turnover24h
+                        ) > 0
+                )
+
+
+                /*
+                 * Сортировка по
+                 * 24h turnover.
+                 */
+
+                .sort(
+                    (a, b) =>
+
+                        Number(
+                            b.turnover24h
+                        ) -
+
+                        Number(
+                            a.turnover24h
+                        )
+                )
+
+
+                .slice(
+                    0,
+                    MAX_SYMBOLS
+                );
+
+
+        symbols.length = 0;
+
+        symbolRanks.clear();
+
+
+        list.forEach(
+            (
+                item,
+                index
+            ) => {
+
+                symbols.push(
+                    item.symbol
+                );
+
+
+                symbolRanks.set(
+                    item.symbol,
+                    index + 1
+                );
+
+
+                initSymbol(
+                    item.symbol
+                );
+
+            }
+        );
+
+
+        coinCountEl.innerText =
+            symbols.length;
+
+
+        return true;
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "TOP loading error:",
+            error
+        );
+
+
+        statusEl.innerText =
+            "Ошибка загрузки TOP-100";
+
+        statusEl.style.color =
+            "#e74c3c";
+
+
+        return false;
+
+    }
+
+}
+
+
+/* =====================================================
+   START
+===================================================== */
+
+async function startScanner() {
+
+    if (
+        running
+    )
+        return;
+
+
+    running = true;
+
+
+    reconnectAttempts = 0;
+
+
+    /*
+     * Загружаем TOP.
+     */
+
+    const success =
+        await loadSymbols();
+
+
+    if (
+        !success
+    ) {
+
+        running = false;
+
+        return;
+
+    }
+
+
+    /*
+     * Чистим старые данные.
+     */
+
+    klines.clear();
+
+    trades.clear();
+
+    prices.clear();
+
+    levels.clear();
+
+    signals.clear();
+
+
+    /*
+     * Инициализируем.
+     */
+
+    symbols.forEach(
+        initSymbol
+    );
+
+
+    /*
+     * WebSocket.
+     */
+
+    connectWebSocket();
+
+
+    /*
+     * Анализ.
+
+     * Небольшая задержка после
+     * подключения, чтобы свечи
+     * успели прийти.
+     */
+
+    analysisTimer =
+        setInterval(
+            analyzeAll,
+            ANALYSIS_INTERVAL
+        );
+
+
+    /*
+     * UI.
+     */
+
+    uiTimer =
+        setInterval(
+            renderSignals,
+            UI_INTERVAL
+        );
+
+
+    /*
+     * Обновление TOP.
+     */
+
+    symbolRefreshTimer =
+        setInterval(
+            async () => {
+
+                if (!running)
+                    return;
+
+
+                const oldSymbols =
+                    [
+                        ...symbols
+                    ];
+
+
+                const success =
+                    await loadSymbols();
+
+
+                if (
+                    !success
+                )
+                    return;
+
+
+                /*
+                 * Переподключаемся
+                 * только если TOP
+                 * действительно изменился.
+                 */
+
+                const changed =
+                    oldSymbols.length !==
+                    symbols.length ||
+
+                    oldSymbols.some(
+                        (
+                            symbol,
+                            index
+                        ) =>
+                            symbol !==
+                            symbols[index]
+                    );
+
+
+                if (
+                    changed
+                ) {
+
+                    klines.clear();
+
+                    trades.clear();
+
+                    prices.clear();
+
+                    signals.clear();
+
+
+                    connectWebSocket();
+
+                }
+
+            },
+            SYMBOL_REFRESH
+        );
+
+}
+
+
+/* =====================================================
+   STOP
+===================================================== */
+
+function stopScanner() {
+
+    running = false;
+
+
+    if (
+        analysisTimer
+    ) {
+
+        clearInterval(
+            analysisTimer
+        );
+
+        analysisTimer =
+            null;
+
+    }
+
+
+    if (
+        uiTimer
+    ) {
+
+        clearInterval(
+            uiTimer
+        );
+
+        uiTimer =
+            null;
+
+    }
+
+
+    if (
+        symbolRefreshTimer
+    ) {
+
+        clearInterval(
+            symbolRefreshTimer
+        );
+
+        symbolRefreshTimer =
+            null;
+
+    }
+
+
+    if (
+        reconnectTimer
+    ) {
+
+        clearTimeout(
+            reconnectTimer
+        );
+
+        reconnectTimer =
+            null;
+
+    }
+
+
+    stopHeartbeat();
+
+
+    if (
+        ws
+    ) {
+
+        try {
+
+            ws.onclose =
+                null;
+
+            ws.close();
+
+        } catch (
+            error
+        ) {}
+
+        ws = null;
+
+    }
+
+
+    wsEl.innerText =
+        "OFF";
+
+    wsEl.className =
+        "stat-value";
+
+
+    statusEl.innerText =
+        "Остановлен";
+
+    statusEl.style.color =
+        "#848e9c";
+
+}
+
+
+/* =====================================================
+   CLEAR
+===================================================== */
+
+function clearSignals() {
+
+    signals.clear();
+
+    renderSignals();
+
+}
+
+
+/* =====================================================
+   INIT
+===================================================== */
+
+console.log(
+    "🚀 Bybit Breakout Scanner loaded"
+);
+
+console.log(
+    "TOP:",
+    MAX_SYMBOLS
+);
+
+console.log(
+    "KLINE:",
+    KLINE_INTERVAL
+);
+
+console.log(
+    "MAX SIGNALS:",
+    MAX_SIGNALS
+);
+
+</script>
+
+</body>
+
+</html>
