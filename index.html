@@ -3,532 +3,644 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bybit Breakout Scanner Pro</title>
+<title>Bybit Institutional OrderFlow Engine v5 (Production Grade)</title>
 <style>
 * { box-sizing: border-box; }
-body { margin: 0; padding: 15px; background: #0b0e11; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-.header { background: #1e2329; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
-h1 { font-size: 20px; margin: 0 0 15px 0; }
-.controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-button, select { border: none; border-radius: 8px; padding: 10px 14px; font-weight: bold; cursor: pointer; }
-button { background: #f7931a; color: #1e2329; }
-button.stop { background: #e74c3c; color: white; }
-button.clear { background: #555; color: white; }
-select { background: #2b3139; color: white; }
-.status { color: #848e9c; font-size: 13px; margin-top: 8px; }
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
-.stat { background: #161a1e; border-radius: 8px; padding: 9px; text-align: center; font-size: 11px; }
-.stat-value { display: block; font-size: 15px; font-weight: bold; margin-top: 4px; }
-.section-title { color: #848e9c; font-size: 14px; margin: 15px 0 8px; }
-.signals { height: 70vh; min-height: 400px; overflow-y: auto; }
-.signal { background: #1e2329; border-radius: 11px; padding: 13px; margin-bottom: 9px; border-left: 5px solid #555; }
-.signal.long { border-left-color: #27ae60; }
-.signal.short { border-left-color: #e74c3c; }
-.signal-top { display: flex; justify-content: space-between; align-items: center; }
-.symbol { font-size: 17px; font-weight: bold; }
-.direction { font-weight: bold; font-size: 14px; }
-.score { font-size: 22px; font-weight: bold; margin-top: 6px; }
-.entry-box { margin-top: 10px; background: #161a1e; padding: 12px; border-radius: 9px; }
-.entry-title { color: #848e9c; font-size: 11px; }
-.entry-price { font-size: 22px; font-weight: bold; margin-top: 3px; }
-.data-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 10px; }
-.data-box { background: #161a1e; padding: 8px; border-radius: 7px; font-size: 11px; color: #848e9c; }
-.data-box strong { display: block; color: #eaecef; font-size: 13px; margin-top: 3px; }
-.reason { margin-top: 9px; padding: 8px; border-radius: 7px; background: #161a1e; font-size: 12px; line-height: 1.5; }
-.empty { text-align: center; color: #848e9c; padding: 60px 15px; }
-.green { color: #27ae60; }
-.red { color: #e74c3c; }
-.gray { color: #848e9c; }
-@media (max-width: 600px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .signals { height: 65vh; }
-}
+body { margin: 0; padding: 15px; background: #080a0c; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
+.header { background: #12161c; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #1e2630; }
+h1 { font-size: 18px; margin: 0 0 12px 0; color: #f0b90b; display: flex; align-items: center; gap: 8px; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+button { border: none; border-radius: 6px; padding: 10px 16px; font-weight: bold; cursor: pointer; background: #f0b90b; color: #000; font-size: 12px; }
+button.stop { background: #f6465d; color: white; }
+button.clear { background: #2b313a; color: white; }
+.status-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 10px; }
+.stat-card { background: #181e25; border-radius: 6px; padding: 8px; text-align: center; border: 1px solid #222c37; }
+.stat-card span { display: block; font-size: 13px; font-weight: bold; margin-top: 2px; }
+.signals { height: 72vh; overflow-y: auto; }
+.card { background: #12161c; border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 5px solid #2b313a; border: 1px solid #1e2630; transition: all 0.2s ease; }
+.card.entry { border-left: 5px solid #0ecb81; box-shadow: 0 0 15px rgba(14, 203, 129, 0.15); }
+.card.cancelled { border-left: 5px solid #f6465d; opacity: 0.6; }
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.symbol { font-size: 16px; font-weight: bold; }
+.badge { font-weight: bold; font-size: 11px; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
+.badge.entry { background: rgba(14, 203, 129, 0.2); color: #0ecb81; }
+.badge.cancelled { background: rgba(246, 70, 93, 0.2); color: #f6465d; }
+.badge.cluster { background: rgba(59, 130, 246, 0.2); color: #60a5fa; margin-left: 5px; }
+.badge.vol { background: rgba(168, 85, 247, 0.2); color: #c084fc; margin-left: 5px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; font-size: 11px; }
+.box { background: #181e25; padding: 6px 8px; border-radius: 4px; color: #848e9c; }
+.box strong { display: block; color: #eaecef; font-size: 12px; margin-top: 2px; }
+.empty { text-align: center; color: #848e9c; padding: 50px; font-size: 13px; }
+.progress-bar { width: 100%; height: 4px; background: #181e25; border-radius: 2px; overflow: hidden; margin-top: 8px; }
+.progress-fill { height: 100%; width: 0%; background: #f0b90b; transition: width 0.1s ease; }
 </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>🚀 Bybit Breakout Scanner Pro</h1>
+    <h1>⚡ Bybit Institutional OrderFlow Engine v5 (Production Grade)</h1>
     <div class="controls">
-        <button onclick="startScanner()">▶ Запустить</button>
-        <button class="stop" onclick="stopScanner()">⏹ Стоп</button>
-        <button class="clear" onclick="clearSignals()">🗑 Очистить</button>
-    </div>
-    <div class="controls">
-        <label>Период уровня:
-            <select id="levelPeriod">
-                <option value="24">2 часа (24 свечи)</option>
-                <option value="48" selected>4 часа (48 свечей)</option>
-                <option value="72">6 часов (72 свечи)</option>
-                <option value="96">8 часов (96 свечей)</option>
-            </select>
-        </label>
-        <label>Мин. Score:
-            <select id="minScore">
-                <option value="60">60</option>
-                <option value="70" selected>70</option>
-                <option value="80">80</option>
-            </select>
+        <button onclick="startEngine()">▶ Запустить Сканер</button>
+        <button class="stop" onclick="stopEngine()">⏹ Стоп</button>
+        <button class="clear" onclick="clearCards()">🗑 Очистить</button>
+        <label style="font-size: 12px; color: #848e9c; margin-left: 10px;">
+            <input type="checkbox" id="soundToggle" checked> 🔔 Звук
         </label>
     </div>
-    <div class="status">Статус: <span id="status">Остановлен</span></div>
-    <div class="stats">
-        <div class="stat">TOP 100<span id="coinCount" class="stat-value">0</span></div>
-        <div class="stat">WS<span id="wsStatus" class="stat-value">OFF</span></div>
-        <div class="stat">Уровней<span id="levelCount" class="stat-value">0</span></div>
-        <div class="stat">Сигналов<span id="signalCount" class="stat-value">0</span></div>
+    <div class="status-bar">
+        <div class="stat-card">Монеты<span id="coinCount">0</span></div>
+        <div class="stat-card">Загрузка REST<span id="loadProgress">0%</span></div>
+        <div class="stat-card">WS Потоки (4x)<span id="wsStatus" style="color:#f6465d">0/4</span></div>
+        <div class="stat-card">Сигналы (ENTRY)<span id="sigCount">0</span></div>
+        <div class="stat-card">Активные Кластеры<span id="clusterCount">0</span></div>
     </div>
+    <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
 </div>
 
-<div class="section-title">🔥 TOP-5 вероятных пробоев</div>
 <div id="signals" class="signals">
-    <div class="empty">
-        Запусти сканер.<br><br>
-        Он загрузит историю, подключит WS и найдёт лучшие точки пробоя.
-    </div>
+    <div class="empty" id="emptyState">Нажмите "Запустить Сканер" для старта инициализации...</div>
 </div>
 
 <script>
-const MAX_SYMBOLS = 100;
-const MAX_SIGNALS = 5;
-const KLINE_INTERVAL = "5";
-const MAX_KLINES = 100;
-const ANALYSIS_INTERVAL = 1500;
-const UI_INTERVAL = 1000;
-const SYMBOL_REFRESH = 5 * 60 * 1000;
-const MAX_LEVEL_DISTANCE = 0.015;
-const MIN_LEVEL_DISTANCE = 0.0005;
-const TRADE_WINDOW = 30000;
-const PING_INTERVAL = 20000;
-
-let ws = null;
+// ============================================================================
+// WEB WORKER ENGINE (HFT OrderBook Processing & Analytics)
+// ============================================================================
+const workerCode = `
+const ORDERBOOK_DEPTH = 50;
+let wsConnections = [];
+let symbols = [];
+let symbolMetrics = new Map();
 let running = false;
-let symbolRefreshTimer = null;
-let analysisTimer = null;
-let uiTimer = null;
-let pingTimer = null;
 
-const symbols = [];
-const symbolRanks = new Map();
-const klines = new Map();
-const prices = new Map();
-const tradeFlows = new Map(); // Оптимизированный агрегатор потока сделок
-const signals = new Map();
-
-const statusEl = document.getElementById("status");
-const wsEl = document.getElementById("wsStatus");
-const coinCountEl = document.getElementById("coinCount");
-const levelCountEl = document.getElementById("levelCount");
-const signalCountEl = document.getElementById("signalCount");
-const signalsEl = document.getElementById("signals");
+const books = new Map();
+const swingLevels = new Map();
+const wallStateMap = new Map();
+const recentTrades = new Map();
 
 function now() { return Date.now(); }
 
-function priceFormat(value) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return "-";
-    if (n >= 1000) return n.toFixed(2);
-    if (n >= 1) return n.toFixed(4);
-    return n.toFixed(6);
-}
-
-function percent(value) { return (Number(value) * 100).toFixed(2) + "%"; }
-function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
-
-function initSymbol(symbol) {
-    if (!klines.has(symbol)) klines.set(symbol, []);
-    if (!tradeFlows.has(symbol)) tradeFlows.set(symbol, { buy: 0, sell: 0, count: 0, resetAt: now() + TRADE_WINDOW });
-}
-
-// Оптимизированная обработка сделок
-function processTrade(data) {
-    if (!Array.isArray(data)) return;
-    for (const trade of data) {
-        const symbol = trade.s;
-        const price = Number(trade.p);
-        const qty = Number(trade.v);
-        if (!symbol || !prices.has(symbol)) continue;
-
-        prices.set(symbol, price);
-        let flow = tradeFlows.get(symbol);
-        if (!flow) continue;
-
-        if (now() > flow.resetAt) {
-            flow.buy = 0; flow.sell = 0; flow.count = 0;
-            flow.resetAt = now() + TRADE_WINDOW;
-        }
-
-        const val = price * qty;
-        if (trade.S === "Buy") flow.buy += val;
-        else flow.sell += val;
-        flow.count++;
+self.onmessage = function(e) {
+    const { type, payload } = e.data;
+    if (type === 'START') {
+        symbols = payload.symbols;
+        payload.metrics.forEach(([s, m]) => symbolMetrics.set(s, m));
+        running = true;
+        initMultiWS();
+        startGarbageCollector();
+    } else if (type === 'STOP') {
+        running = false;
+        closeWS();
+    } else if (type === 'SET_SWINGS') {
+        swingLevels.set(payload.symbol, payload.data);
     }
-}
+};
 
-function getTradeFlow(symbol) {
-    const flow = tradeFlows.get(symbol) || { buy: 0, sell: 0, count: 0 };
-    const total = flow.buy + flow.sell;
-    const imbalance = total > 0 ? (flow.buy - flow.sell) / total : 0;
-    return { ...flow, total, imbalance };
-}
+// ----------------------------------------------------------------------------
+// 1. GARBAGE COLLECTOR & TTL CLEANUP
+// ----------------------------------------------------------------------------
+function startGarbageCollector() {
+    setInterval(() => {
+        if (!running) return;
+        const currentTime = now();
 
-function processKline(symbol, data) {
-    if (!Array.isArray(data)) return;
-    initSymbol(symbol);
-    const list = klines.get(symbol);
-
-    for (const candle of data) {
-        const item = {
-            start: Number(candle.start),
-            high: Number(candle.high),
-            low: Number(candle.low),
-            close: Number(candle.close),
-            turnover: Number(candle.turnover)
-        };
-        prices.set(symbol, item.close);
-
-        const idx = list.findIndex(x => x.start === item.start);
-        if (idx >= 0) list[idx] = item;
-        else list.push(item);
-    }
-
-    list.sort((a, b) => a.start - b.start);
-    while (list.length > MAX_KLINES) list.shift();
-}
-
-// Загрузка исторической K-line через REST API
-async function fetchKlineHistory(symbol) {
-    try {
-        const res = await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${KLINE_INTERVAL}&limit=${MAX_KLINES}`);
-        const json = await res.json();
-        if (json.retCode === 0 && json.result?.list) {
-            const formatted = json.result.list.map(c => ({
-                start: Number(c[0]),
-                open: Number(c[1]),
-                high: Number(c[2]),
-                low: Number(c[3]),
-                close: Number(c[4]),
-                turnover: Number(c[6])
-            })).reverse();
-            klines.set(symbol, formatted);
-            if (formatted.length > 0) prices.set(symbol, formatted[formatted.length - 1].close);
-        }
-    } catch (e) {
-        console.error(`Ошибка загрузки истории ${symbol}:`, e);
-    }
-}
-
-function getATR(candles, period = 14) {
-    if (candles.length < period + 1) return 0;
-    const recent = candles.slice(-(period + 1));
-    let sum = 0;
-    for (let i = 1; i < recent.length; i++) {
-        const tr = Math.max(
-            recent[i].high - recent[i].low,
-            Math.abs(recent[i].high - recent[i - 1].close),
-            Math.abs(recent[i].low - recent[i - 1].close)
-        );
-        sum += tr;
-    }
-    return sum / period;
-}
-
-function findCandidateLevels(symbol) {
-    const candles = klines.get(symbol) || [];
-    const period = parseInt(document.getElementById("levelPeriod").value);
-    const data = candles.slice(-period);
-    if (data.length < 10) return [];
-
-    const currentPrice = prices.get(symbol) || data[data.length - 1].close;
-    if (!currentPrice) return [];
-
-    const candidates = [];
-    for (let i = 2; i < data.length - 2; i++) {
-        const c = data[i];
-        if (c.high >= data[i-1].high && c.high >= data[i-2].high && c.high >= data[i+1].high && c.high >= data[i+2].high) {
-            candidates.push({ type: "RESISTANCE", price: c.high, index: i });
-        }
-        if (c.low <= data[i-1].low && c.low <= data[i-2].low && c.low <= data[i+1].low && c.low <= data[i+2].low) {
-            candidates.push({ type: "SUPPORT", price: c.low, index: i });
-        }
-    }
-
-    return candidates.filter(level => {
-        const dist = Math.abs(level.price - currentPrice) / currentPrice;
-        return dist >= MIN_LEVEL_DISTANCE && dist <= MAX_LEVEL_DISTANCE;
-    });
-}
-
-function mergeLevels(candidates, atr) {
-    const result = [];
-    const tolerance = Math.max(atr * 0.35, 0.0008);
-    const sorted = [...candidates].sort((a, b) => a.price - b.price);
-
-    for (const cand of sorted) {
-        let existing = result.find(r => r.type === cand.type && Math.abs(r.price - cand.price) <= tolerance);
-        if (existing) {
-            existing.price = (existing.price * existing.touches + cand.price) / (existing.touches + 1);
-            existing.touches++;
-            existing.lastIndex = Math.max(existing.lastIndex, cand.index);
-        } else {
-            result.push({ type: cand.type, price: cand.price, touches: 1, lastIndex: cand.index });
-        }
-    }
-    return result;
-}
-
-function scoreLevel(symbol, level) {
-    const candles = klines.get(symbol) || [];
-    if (candles.length < 20) return null;
-
-    const currentPrice = prices.get(symbol) || candles[candles.length - 1].close;
-    const atr = getATR(candles.slice(-30));
-    if (!currentPrice || !atr) return null;
-
-    const distance = Math.abs(level.price - currentPrice) / currentPrice;
-    if (distance > MAX_LEVEL_DISTANCE) return null;
-
-    let touches = 0;
-    const tolerance = Math.max(atr * 0.30, currentPrice * 0.0008);
-    for (const c of candles) {
-        if (Math.abs(c.high - level.price) <= tolerance || Math.abs(c.low - level.price) <= tolerance) {
-            touches++;
-        }
-    }
-    if (touches < 2) return null;
-
-    const recent = candles.slice(-6);
-    const momentum = (recent[recent.length - 1].close - recent[0].close) / recent[0].close;
-    const direction = level.type === "RESISTANCE" ? "LONG" : "SHORT";
-
-    const flow = getTradeFlow(symbol);
-    let flowScore = 0;
-    if (flow.count >= 5) {
-        flowScore = direction === "LONG" ? clamp(flow.imbalance * 40, -20, 25) : clamp(-flow.imbalance * 40, -20, 25);
-    }
-
-    const distanceScore = clamp((1 - distance / MAX_LEVEL_DISTANCE) * 20, 0, 20);
-    const touchScore = clamp(touches * 6, 0, 24);
-    const freshnessScore = clamp(15 - (candles.length - 1 - level.lastIndex) * 1.5, 0, 15);
-
-    const avgTurnover = candles.slice(-20).reduce((s, c) => s + c.turnover, 0) / 20;
-    const recentTurnover = candles.slice(-3).reduce((s, c) => s + c.turnover, 0) / 3;
-    const volumeRatio = avgTurnover > 0 ? recentTurnover / avgTurnover : 0;
-    const volumeScore = clamp((volumeRatio - 0.8) * 15, -10, 15);
-
-    let score = 20 + distanceScore + touchScore + freshnessScore + flowScore + volumeScore;
-    if ((direction === "LONG" && momentum < -0.004) || (direction === "SHORT" && momentum > 0.004)) score -= 15;
-
-    const alreadyBroken = direction === "LONG" ? currentPrice > level.price * 1.0015 : currentPrice < level.price * 0.9985;
-    if (alreadyBroken) return null;
-
-    score = clamp(Math.round(score), 0, 100);
-    const minScoreThreshold = parseInt(document.getElementById("minScore").value);
-    if (score < minScoreThreshold) return null;
-
-    const entry = direction === "LONG" ? level.price + Math.max(atr * 0.08, level.price * 0.0004) : level.price - Math.max(atr * 0.08, level.price * 0.0004);
-
-    return {
-        symbol, rank: symbolRanks.get(symbol), direction, level: level.price,
-        entry, score, touches, distance, momentum, flow, volumeRatio
-    };
-}
-
-function analyzeAll() {
-    if (!running) return;
-    const all = [];
-    let totalLevels = 0;
-
-    for (const symbol of symbols) {
-        const candles = klines.get(symbol) || [];
-        const atr = getATR(candles.slice(-30));
-        if (!atr) continue;
-
-        const candidates = findCandidateLevels(symbol);
-        const merged = mergeLevels(candidates, atr);
-        totalLevels += merged.length;
-
-        for (const lvl of merged) {
-            const scored = scoreLevel(symbol, lvl);
-            if (scored) all.push(scored);
-        }
-    }
-
-    all.sort((a, b) => b.score - a.score);
-    const selected = [];
-    for (const sig of all) {
-        if (!selected.some(x => x.symbol === sig.symbol && x.direction === sig.direction)) {
-            selected.push(sig);
-            if (selected.length >= MAX_SIGNALS) break;
-        }
-    }
-
-    signals.clear();
-    for (const sig of selected) signals.set(`${sig.symbol}_${sig.direction}`, sig);
-    levelCountEl.innerText = totalLevels;
-}
-
-function renderSignals() {
-    const list = [...signals.values()].sort((a, b) => b.score - a.score);
-    signalCountEl.innerText = list.length;
-
-    if (list.length === 0) {
-        signalsEl.innerHTML = `<div class="empty">🔎 Ищем уровни с подходящим Score...</div>`;
-        return;
-    }
-
-    let html = "";
-    list.forEach((s, i) => {
-        const isLong = s.direction === "LONG";
-        html += `
-            <div class="signal ${isLong ? 'long' : 'short'}">
-                <div class="signal-top">
-                    <div class="symbol">${isLong ? '🟢' : '🔴'} #${i + 1} ${s.symbol} <span class="gray">TOP ${s.rank}</span></div>
-                    <div class="direction">${s.direction}</div>
-                </div>
-                <div class="score">Score: ${s.score}/100</div>
-                <div class="entry-box">
-                    <div class="entry-title">ЦЕНА ВХОДА ПОСЛЕ ПРОБОЯ</div>
-                    <div class="entry-price">${priceFormat(s.entry)}</div>
-                </div>
-                <div class="data-grid">
-                    <div class="data-box">Уровень<strong>${priceFormat(s.level)}</strong></div>
-                    <div class="data-box">Тип<strong>${isLong ? 'СОПРОТИВЛЕНИЕ' : 'ПОДДЕРЖКА'}</strong></div>
-                    <div class="data-box">До уровня<strong>${percent(s.distance)}</strong></div>
-                    <div class="data-box">Касаний<strong>${s.touches}</strong></div>
-                    <div class="data-box">Объём<strong>${s.volumeRatio.toFixed(1)}x</strong></div>
-                    <div class="data-box">Дисбаланс<strong>${percent(s.flow.imbalance)}</strong></div>
-                </div>
-            </div>`;
-    });
-    signalsEl.innerHTML = html;
-}
-
-function subscribeAll() {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const args = [];
-    for (const symbol of symbols) {
-        args.push(`kline.${KLINE_INTERVAL}.${symbol}`);
-        args.push(`publicTrade.${symbol}`);
-    }
-
-    const CHUNK = 40;
-    for (let i = 0; i < args.length; i += CHUNK) {
-        const chunk = args.slice(i, i + CHUNK);
-        setTimeout(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ op: "subscribe", args: chunk }));
+        for (const [key, state] of wallStateMap.entries()) {
+            if (currentTime - state.lastUpdated > 60000 || state.status === 'CANCELLED') {
+                wallStateMap.delete(key);
+                self.postMessage({ type: 'SIGNAL_EXPIRED', payload: { key } });
             }
-        }, Math.floor(i / CHUNK) * 100);
+        }
+
+        for (const [symbol, buffer] of recentTrades.entries()) {
+            const cutoff = currentTime - 5000;
+            while (buffer.length > 0 && buffer[0].t < cutoff) buffer.shift();
+            if (buffer.length === 0) recentTrades.delete(symbol);
+        }
+    }, 5000);
+}
+
+function getMinClusterSize(symbol) {
+    const m = symbolMetrics.get(symbol) || { rank: 100, turnover: 10000000 };
+    let rankFloor = 150000;
+    if (m.rank <= 3) rankFloor = 3000000;
+    else if (m.rank <= 15) rankFloor = 1200000;
+    else if (m.rank <= 40) rankFloor = 500000;
+    else if (m.rank <= 80) rankFloor = 250000;
+
+    return Math.max(rankFloor, m.turnover * 0.00008);
+}
+
+function closeWS() {
+    wsConnections.forEach(ws => { try { ws.onclose=null; ws.close(); } catch(e){} });
+    wsConnections = [];
+}
+
+// ----------------------------------------------------------------------------
+// 2. MULTI-WEBSOCKET ROUTER (4 CONNS WITH RATE-LIMIT CONTROL)
+// ----------------------------------------------------------------------------
+function initMultiWS() {
+    closeWS();
+    books.clear(); wallStateMap.clear(); recentTrades.clear();
+    const chunkSize = 25;
+    let activeWSCount = 0;
+
+    for (let i = 0; i < symbols.length; i += chunkSize) {
+        const group = symbols.slice(i, i + chunkSize);
+        createSingleWS(group, () => {
+            activeWSCount++;
+            self.postMessage({ type: 'WS_STATUS', payload: \`\${activeWSCount}/4\` });
+        });
     }
 }
 
-function startHeartbeat() {
-    stopHeartbeat();
-    pingTimer = setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ op: "ping" }));
-    }, PING_INTERVAL);
-}
+function createSingleWS(group, onOpenCb) {
+    const ws = new WebSocket("wss://stream.bybit.com/v5/public/linear");
+    wsConnections.push(ws);
 
-function stopHeartbeat() {
-    if (pingTimer) clearInterval(pingTimer);
-    pingTimer = null;
-}
+    ws.onopen = async () => {
+        if (onOpenCb) onOpenCb();
+        const args = [];
+        group.forEach(s => {
+            args.push(\`orderbook.\${ORDERBOOK_DEPTH}.\${s}\`);
+            args.push(\`publicTrade.\${s}\`);
+        });
 
-function connectWebSocket() {
-    if (!running) return;
-    if (ws) { try { ws.onclose = null; ws.close(); } catch(e){} }
-
-    statusEl.innerText = "Подключение WS...";
-    statusEl.style.color = "#f7931a";
-
-    ws = new WebSocket("wss://stream.bybit.com/v5/public/linear");
-    ws.onopen = () => {
-        wsEl.innerText = "ON"; wsEl.className = "stat-value green";
-        statusEl.innerText = "Сканирование активно"; statusEl.style.color = "#27ae60";
-        startHeartbeat();
-        subscribeAll();
+        // Отправка с микро-паузами для избежания Rate Limit WebSocket
+        for (let i = 0; i < args.length; i += 20) {
+            ws.send(JSON.stringify({ op: "subscribe", args: args.slice(i, i + 20) }));
+            await new Promise(r => setTimeout(r, 100));
+        }
     };
 
     ws.onmessage = (e) => {
+        if (!running) return;
         try {
             const data = JSON.parse(e.data);
             if (!data.topic) return;
-            if (data.topic.startsWith("kline.")) {
-                const symbol = data.topic.split(".")[2];
-                processKline(symbol, data.data);
-            } else if (data.topic.startsWith("publicTrade.")) {
-                processTrade(data.data);
-            }
-        } catch (err) {}
+            const parts = data.topic.split('.');
+            const type = parts[0], symbol = parts[parts.length - 1];
+
+            if (type === 'orderbook') handleOrderbook(symbol, data);
+            else if (type === 'publicTrade') handleTrades(symbol, data.data);
+        } catch(err){}
     };
 
-    ws.onclose = () => {
-        stopHeartbeat();
-        wsEl.innerText = "OFF"; wsEl.className = "stat-value red";
-        if (running) setTimeout(connectWebSocket, 3000);
-    };
+    ws.onclose = () => { if (running) setTimeout(() => createSingleWS(group, null), 3000); };
 }
 
-async function loadSymbols() {
-    try {
-        statusEl.innerText = "Загрузка TOP-100...";
-        const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
-        const json = await res.json();
-        
-        const list = json.result.list
-            .filter(i => i.symbol && i.symbol.endsWith("USDT") && Number(i.turnover24h) > 0)
-            .sort((a, b) => Number(b.turnover24h) - Number(a.turnover24h))
-            .slice(0, MAX_SYMBOLS);
+// ----------------------------------------------------------------------------
+// 3. ORDERBOOK SYNCHRONIZATION WITH SEQUENCE VALIDATION (u / seq)
+// ----------------------------------------------------------------------------
+function handleOrderbook(symbol, data) {
+    let book = books.get(symbol);
 
-        symbols.length = 0;
-        symbolRanks.clear();
+    if (data.type === 'snapshot') {
+        book = {
+            bids: new Map(),
+            asks: new Map(),
+            lastPrice: 0,
+            seq: data.cts || data.u
+        };
+        data.data.b.forEach(o => book.bids.set(parseFloat(o[0]), parseFloat(o[1])));
+        data.data.a.forEach(o => book.asks.set(parseFloat(o[0]), parseFloat(o[1])));
+        books.set(symbol, book);
+    } else if (data.type === 'delta') {
+        if (!book) return; // Нет snapshot — пропускаем дельту
 
-        statusEl.innerText = "Загрузка истории свечей...";
-        for (let i = 0; i < list.length; i++) {
-            const sym = list[i].symbol;
-            symbols.push(sym);
-            symbolRanks.set(sym, i + 1);
-            initSymbol(sym);
-            await fetchKlineHistory(sym); // Ограничено частотой REST
+        // Проверка последовательности sequence numbers
+        const currentSeq = data.cts || data.u;
+        if (book.seq && currentSeq < book.seq) {
+            // Рассинхронизация пакетов — сбрасываем стакан
+            books.delete(symbol);
+            return;
         }
+        book.seq = currentSeq;
 
-        coinCountEl.innerText = symbols.length;
-        return true;
-    } catch (e) {
-        statusEl.innerText = "Ошибка загрузки данных";
-        return false;
+        data.data.b.forEach(o => { 
+            const p=parseFloat(o[0]), q=parseFloat(o[1]); 
+            q===0 ? book.bids.delete(p) : book.bids.set(p,q); 
+        });
+        data.data.a.forEach(o => { 
+            const p=parseFloat(o[0]), q=parseFloat(o[1]); 
+            q===0 ? book.asks.delete(p) : book.asks.set(p,q); 
+        });
+    }
+
+    checkClusterDisappearance(symbol, book);
+    processEngine(symbol);
+}
+
+function handleTrades(symbol, trades) {
+    if (!trades || !trades.length) return;
+    const book = books.get(symbol);
+    if (!book) return;
+
+    book.lastPrice = parseFloat(trades[0].p);
+
+    if (!recentTrades.has(symbol)) recentTrades.set(symbol, []);
+    const buffer = recentTrades.get(symbol);
+
+    trades.forEach(t => {
+        buffer.push({ p: parseFloat(t.p), v: parseFloat(t.v), val: parseFloat(t.p)*parseFloat(t.v), side: t.S, t: now() });
+    });
+
+    processEngine(symbol);
+}
+
+// ----------------------------------------------------------------------------
+// 4. MATHEMATICS: VOLATILITY (PERCENTAGE ATR) & PEAK DENSITY
+// ----------------------------------------------------------------------------
+function calculatePercentageATR(klines) {
+    if (!klines || klines.length < 2) return 0;
+    let trSum = 0;
+    for (let i = 1; i < klines.length; i++) {
+        const tr = Math.max(
+            klines[i].h - klines[i].l,
+            Math.abs(klines[i].h - klines[i-1].c),
+            Math.abs(klines[i].l - klines[i-1].c)
+        );
+        trSum += tr;
+    }
+    const absoluteATR = trSum / (klines.length - 1);
+    return (absoluteATR / klines[klines.length - 1].c) * 100;
+}
+
+function getMarketRegime(k5m, k1h) {
+    const atrPct5m = calculatePercentageATR(k5m);
+    const atrPct1h = calculatePercentageATR(k1h);
+    if (atrPct1h === 0) return { isTradeable: false, rviNorm: 0 };
+
+    const rviNorm = atrPct5m / atrPct1h;
+    const isTradeable = rviNorm >= 0.4 && rviNorm <= 2.2; // Исключаем флэт и дикий памп
+    return { isTradeable, rviNorm, atrPct5m };
+}
+
+function findPeakDensityCluster(sourceMap, targetPrice, maxDistPct, minUsdVolume) {
+    if (!sourceMap || sourceMap.size === 0) return null;
+
+    const levels = [];
+    let windowTotalUsd = 0;
+
+    for (const [price, qty] of sourceMap.entries()) {
+        const dist = Math.abs(price - targetPrice) / targetPrice;
+        if (dist <= maxDistPct) {
+            const usdVal = price * qty;
+            levels.push({ price, qty, usdVal });
+            windowTotalUsd += usdVal;
+        }
+    }
+
+    if (levels.length === 0 || windowTotalUsd < minUsdVolume) return null;
+    levels.sort((a, b) => a.price - b.price);
+
+    let peakIndex = 0, maxSingleTickUsd = 0;
+    for (let i = 0; i < levels.length; i++) {
+        if (levels[i].usdVal > maxSingleTickUsd) {
+            maxSingleTickUsd = levels[i].usdVal;
+            peakIndex = i;
+        }
+    }
+
+    const coreStartIndex = Math.max(0, peakIndex - 2);
+    const coreEndIndex = Math.min(levels.length - 1, peakIndex + 2);
+
+    let coreUsdVolume = 0, weightedPriceSum = 0;
+    for (let i = coreStartIndex; i <= coreEndIndex; i++) {
+        coreUsdVolume += levels[i].usdVal;
+        weightedPriceSum += levels[i].price * levels[i].usdVal;
+    }
+
+    const coreConcentration = coreUsdVolume / windowTotalUsd;
+    const peakSingleConcentration = maxSingleTickUsd / coreUsdVolume;
+
+    // Институциональные фильтры плотности
+    if (coreUsdVolume >= minUsdVolume && coreConcentration >= 0.60 && peakSingleConcentration >= 0.35) {
+        return {
+            clusterAvgPrice: weightedPriceSum / coreUsdVolume,
+            peakPrice: levels[peakIndex].price,
+            coreUsdVolume,
+            totalWindowUsd: windowTotalUsd,
+            minPrice: levels[coreStartIndex].price,
+            maxPrice: levels[coreEndIndex].price,
+            ticksInCore: (coreEndIndex - coreStartIndex) + 1
+        };
+    }
+    return null;
+}
+
+function checkClusterDisappearance(symbol, book) {
+    for (const [key, state] of wallStateMap.entries()) {
+        if (state.symbol === symbol && state.status !== 'CANCELLED') {
+            const source = state.side === 'LONG' ? book.bids : book.asks;
+            const cluster = findPeakDensityCluster(source, state.clusterAvgPrice, 0.002, getMinClusterSize(symbol) * 0.35);
+
+            if (!cluster) {
+                state.status = 'CANCELLED';
+                state.reason = '❌ СПУФИНГ / КЛАСТЕР СНЯТ';
+                self.postMessage({ type: 'SIGNAL_CANCEL', payload: { key, reason: state.reason } });
+                wallStateMap.delete(key);
+            }
+        }
     }
 }
 
-async function startScanner() {
+// ----------------------------------------------------------------------------
+// 5. ENGINE LOGIC & SIGNAL GENERATOR
+// ----------------------------------------------------------------------------
+function processEngine(symbol) {
+    const book = books.get(symbol);
+    const swings = swingLevels.get(symbol);
+    if (!book || !swings || !book.lastPrice) return;
+
+    const regime = getMarketRegime(swings.k5m, swings.k1h);
+    if (!regime.isTradeable) return;
+
+    const price = book.lastPrice;
+    const trades = recentTrades.get(symbol) || [];
+
+    const levelsToTest = [
+        ...swings.lows.map(l => ({ p: l, side: 'LONG' })),
+        ...swings.highs.map(h => ({ p: h, side: 'SHORT' }))
+    ];
+
+    levelsToTest.forEach(lvl => {
+        const key = \`\${symbol}_\${lvl.side}_\${lvl.p}\`;
+        const minClusterSize = getMinClusterSize(symbol);
+        const sourceMap = lvl.side === 'LONG' ? book.bids : book.asks;
+
+        const cluster = findPeakDensityCluster(sourceMap, lvl.p, 0.0025, minClusterSize);
+        if (!cluster) return;
+
+        let state = wallStateMap.get(key) || {
+            key, symbol, side: lvl.side, 
+            clusterAvgPrice: cluster.clusterAvgPrice,
+            clusterMinP: cluster.minPrice,
+            clusterMaxP: cluster.maxPrice,
+            initialVal: cluster.coreUsdVolume,
+            hitsCount: 0, absorbedVol: 0, touched: false, status: 'TRACKING',
+            minPriceAfterTouch: price, maxPriceAfterTouch: price,
+            lastUpdated: now()
+        };
+
+        state.lastUpdated = now();
+        state.clusterMinP = cluster.minPrice;
+        state.clusterMaxP = cluster.maxPrice;
+
+        const borderPrice = lvl.side === 'LONG' ? cluster.maxPrice : cluster.minPrice;
+        if (Math.abs(price - borderPrice) / borderPrice <= 0.0004) { state.touched = true; }
+
+        if (state.touched) {
+            state.minPriceAfterTouch = Math.min(state.minPriceAfterTouch, price);
+            state.maxPriceAfterTouch = Math.max(state.maxPriceAfterTouch, price);
+
+            trades.forEach(t => {
+                const isHit = (lvl.side === 'LONG' && t.side === 'Sell') || (lvl.side === 'SHORT' && t.side === 'Buy');
+                if (isHit && t.p >= cluster.minPrice * 0.999 && t.p <= cluster.maxPrice * 1.001) {
+                    state.hitsCount++;
+                    state.absorbedVol += t.val;
+                }
+            });
+
+            let mktBuy = 0, mktSell = 0;
+            trades.forEach(t => { if (t.side==='Buy') mktBuy+=t.val; else mktSell+=t.val; });
+
+            const atrAbs5m = (regime.atrPct5m / 100) * price;
+            const requiredBounce = atrAbs5m * 0.15;
+            const actualBounce = lvl.side === 'LONG' 
+                ? (price - state.minPriceAfterTouch) 
+                : (state.maxPriceAfterTouch - price);
+
+            let sl = lvl.side === 'LONG' ? cluster.minPrice - (atrAbs5m * 0.15) : cluster.maxPrice + (atrAbs5m * 0.15);
+
+            if (state.hitsCount >= 3 && state.absorbedVol >= 30000 && actualBounce >= requiredBounce) {
+                const flowConfirm = lvl.side === 'LONG' ? (mktBuy > mktSell * 0.75) : (mktSell > mktBuy * 0.75);
+                
+                if (flowConfirm && state.status !== 'ENTRY') {
+                    state.status = 'ENTRY';
+                    const risk = Math.abs(price - sl);
+
+                    self.postMessage({
+                        type: 'SIGNAL_ENTRY',
+                        payload: {
+                            key, symbol, side: lvl.side, price, 
+                            clusterVal: cluster.coreUsdVolume,
+                            clusterAvgPrice: cluster.clusterAvgPrice,
+                            levelsCount: cluster.ticksInCore,
+                            hitsCount: state.hitsCount, 
+                            absorbedVol: state.absorbedVol,
+                            sl, 
+                            tp1: lvl.side === 'LONG' ? price + risk * 2.5 : price - risk * 2.5,
+                            slPct: (risk / price) * 100,
+                            bounceDist: actualBounce / price,
+                            rvi: regime.rviNorm
+                        }
+                    });
+                }
+            }
+        }
+        wallStateMap.set(key, state);
+    });
+}
+`;
+
+// ============================================================================
+// MAIN THREAD: UI MANAGEMENT & RATE-LIMITED REST QUEUE
+// ============================================================================
+let worker = null;
+let running = false;
+let audioCtx = null;
+const activeSignals = new Map();
+const symbols = [];
+const symbolMetrics = new Map();
+
+function playBeep() {
+    if (!document.getElementById("soundToggle").checked) return;
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.frequency.value = 880; gain.gain.value = 0.15;
+        osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+    } catch(e){}
+}
+
+function priceFormat(v) { return Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4); }
+
+// Очередь запросов свечей для исключения HTTP 429
+async function loadKlinesWithQueue(symbolList) {
+    const total = symbolList.length;
+    let completed = 0;
+
+    for (const symbol of symbolList) {
+        if (!running) break;
+        try {
+            const [res5m, res1h] = await Promise.all([
+                fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=30`),
+                fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=60&limit=24`)
+            ]);
+
+            const json5m = await res5m.json();
+            const json1h = await res1h.json();
+
+            if (json5m.result?.list && json1h.result?.list) {
+                const k5m = json5m.result.list.map(k => ({ h: parseFloat(k[2]), l: parseFloat(k[3]), c: parseFloat(k[4]) })).reverse();
+                const k1h = json1h.result.list.map(k => ({ h: parseFloat(k[2]), l: parseFloat(k[3]), c: parseFloat(k[4]) })).reverse();
+
+                const highs = [], lows = [];
+                for (let i = 2; i < k5m.length - 2; i++) {
+                    if (k5m[i].h > k5m[i-1].h && k5m[i].h > k5m[i+2].h) highs.push(k5m[i].h);
+                    if (k5m[i].l < k5m[i-1].l && k5m[i].l < k5m[i+2].l) lows.push(k5m[i].l);
+                }
+
+                if (worker) {
+                    worker.postMessage({ 
+                        type: 'SET_SWINGS', 
+                        payload: { symbol, data: { highs, lows, k5m, k1h } } 
+                    });
+                }
+            }
+        } catch(e){}
+
+        completed++;
+        const pct = Math.round((completed / total) * 100);
+        document.getElementById("loadProgress").innerText = `${pct}%`;
+        document.getElementById("progressFill").style.width = `${pct}%`;
+
+        // Задержка 120 мс между запросами для безопасности по Rate Limit
+        await new Promise(r => setTimeout(r, 120));
+    }
+}
+
+function updateCardDOM(s) {
+    const container = document.getElementById("signals");
+    const emptyState = document.getElementById("emptyState");
+    if (emptyState) emptyState.remove();
+
+    let card = document.getElementById(`card_${s.key}`);
+    const isEntry = s.status === 'ENTRY';
+
+    const cardHTML = `
+        <div class="card-head">
+            <div class="symbol">${s.symbol} <span class="badge ${isEntry ? 'entry' : 'cancelled'}">${s.side}</span>
+            <span class="badge cluster">ПИК-КЛАСТЕР (${s.levelsCount || 1} тика)</span>
+            <span class="badge vol">RVI ${s.rvi ? s.rvi.toFixed(2) : '1.00'}</span></div>
+            <div>${isEntry ? '🟢 ENTRY' : '🔴 CANCELLED'}</div>
+        </div>
+
+        ${isEntry ? `
+        <div class="grid">
+            <div class="box">Объем Кластера<strong>$${(s.clusterVal/1000000).toFixed(2)}M</strong></div>
+            <div class="box">Ударов в Ядро<strong>${s.hitsCount} раз</strong></div>             <div class="box">Поглощено (Absorption)<strong>$${(s.absorbedVol/1000).toFixed(0)}k</strong></div>
+            <div class="box">Импульс (Bounce)<strong>+${(s.bounceDist*100).toFixed(2)}%</strong></div>
+        </div>
+        <div class="grid">
+            <div class="box">Вход (Market)<strong>${priceFormat(s.price)}</strong></div>
+            <div class="box">Dynamic SL (ATR)<strong>${priceFormat(s.sl)} (-${s.slPct.toFixed(2)}%)</strong></div>
+            <div class="box">Take Profit 1<strong>${priceFormat(s.tp1)}</strong></div>
+            <div class="box">Средняя Ядра<strong>${priceFormat(s.clusterAvgPrice)}</strong></div>
+        </div>
+        ` : `<div style="color:#f6465d; font-size:12px;"><b>Причина отмены:</b> ${s.reason}</div>`}
+    `;
+
+    if (!card) {
+        card = document.createElement("div");
+        card.id = `card_${s.key}`;
+        card.className = `card ${isEntry ? 'entry' : 'cancelled'}`;
+        card.innerHTML = cardHTML;
+        container.prepend(card);
+    } else {
+        card.className = `card ${isEntry ? 'entry' : 'cancelled'}`;
+        card.innerHTML = cardHTML;
+    }
+
+    updateCounters();
+}
+
+function removeCardDOM(key) {
+    const card = document.getElementById(`card_${key}`);
+    if (card) card.remove();
+    activeSignals.delete(key);
+    updateCounters();
+}
+
+function updateCounters() {
+    const list = [...activeSignals.values()];
+    document.getElementById("sigCount").innerText = list.filter(s => s.status === 'ENTRY').length;
+    document.getElementById("clusterCount").innerText = list.length;
+}
+
+async function startEngine() {
     if (running) return;
     running = true;
 
-    const ok = await loadSymbols();
-    if (!ok) { running = false; return; }
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    worker = new Worker(URL.createObjectURL(blob));
 
-    connectWebSocket();
-    analysisTimer = setInterval(analyzeAll, ANALYSIS_INTERVAL);
-    uiTimer = setInterval(renderSignals, UI_INTERVAL);
-    symbolRefreshTimer = setInterval(loadSymbols, SYMBOL_REFRESH);
+    worker.onmessage = function(e) {
+        const { type, payload } = e.data;
+        if (type === 'WS_STATUS') {
+            const el = document.getElementById("wsStatus");
+            el.innerText = payload; el.style.color = "#0ecb81";
+        } else if (type === 'SIGNAL_ENTRY') {
+            playBeep();
+            payload.status = 'ENTRY';
+            activeSignals.set(payload.key, payload);
+            updateCardDOM(payload);
+        } else if (type === 'SIGNAL_CANCEL') {
+            if (activeSignals.has(payload.key)) {
+                const s = activeSignals.get(payload.key);
+                s.status = 'CANCELLED';
+                s.reason = payload.reason;
+                updateCardDOM(s);
+            }
+        } else if (type === 'SIGNAL_EXPIRED') {
+            removeCardDOM(payload.key);
+        }
+    };
+
+    document.getElementById("emptyState").innerText = "Загрузка топ-100 монет и инициализация свечей...";
+    
+    // 1. Получение Top-100 монет
+    const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
+    const json = await res.json();
+    symbols.length = 0; symbolMetrics.clear();
+
+    const list = json.result.list
+        .filter(i => i.symbol.endsWith("USDT") && parseFloat(i.turnover24h) > 0)
+        .sort((a,b) => parseFloat(b.turnover24h) - parseFloat(a.turnover24h))
+        .slice(0, 100);
+
+    const metricsArr = [];
+    list.forEach((item, idx) => {
+        symbols.push(item.symbol);
+        const m = { rank: idx + 1, turnover: parseFloat(item.turnover24h) };
+        symbolMetrics.set(item.symbol, m);
+        metricsArr.push([item.symbol, m]);
+    });
+    document.getElementById("coinCount").innerText = symbols.length;
+
+    // 2. Безопасная очередь загрузки свечей через REST
+    await loadKlinesWithQueue(symbols);
+
+    // 3. Запуск Web Worker и HFT-сокетов
+    worker.postMessage({ type: 'START', payload: { symbols, metrics: metricsArr } });
+    document.getElementById("emptyState").innerText = "Мониторинг запущен. Ожидание институциональных сигналов...";
 }
 
-function stopScanner() {
+function stopEngine() {
     running = false;
-    clearInterval(analysisTimer);
-    clearInterval(uiTimer);
-    clearInterval(symbolRefreshTimer);
-    stopHeartbeat();
-    if (ws) ws.close();
-    wsEl.innerText = "OFF";
-    statusEl.innerText = "Остановлен";
-    statusEl.style.color = "#848e9c";
+    if (worker) { worker.postMessage({ type: 'STOP' }); worker.terminate(); worker = null; }
+    document.getElementById("wsStatus").innerText = "0/4";
+    document.getElementById("wsStatus").style.color = "#f6465d";
+    document.getElementById("loadProgress").innerText = "0%";
+    document.getElementById("progressFill").style.width = "0%";
 }
 
-function clearSignals() {
-    signals.clear();
-    renderSignals();
+function clearCards() {
+    activeSignals.clear();
+    document.getElementById("signals").innerHTML = `<div class="empty" id="emptyState">Карточки очищены...</div>`;
+    updateCounters();
 }
 </script>
 </body>
