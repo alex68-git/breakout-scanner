@@ -3,38 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bybit MTF OrderFlow v9 Pro</title>
+<title>Bybit Institutional OrderFlow v10 PRO</title>
 <style>
-body{margin:0;background:#080a0c;color:#eaecef;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:14px}
-.header{background:#12161c;border:1px solid #1e2630;border-radius:12px;padding:14px;margin-bottom:12px}
-button{background:#f0b90b;border:0;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer;margin-right:4px}
+body{margin:0;background:#06080a;color:#eaebed;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:12px;font-size:13px}
+.header{background:#0e1217;border:1px solid #1c232d;border-radius:10px;padding:14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+button{background:#f0b90b;border:0;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;color:#000;margin-right:6px}
 .stop{background:#f6465d;color:#fff}.clear{background:#2b313a;color:#fff}
-#signals{height:78vh;overflow:auto}.card{background:#12161c;border:1px solid #1e2630;border-left:5px solid #0ecb81;border-radius:10px;padding:12px;margin-bottom:10px;transition:all 0.3s}
-.short{border-left-color:#f6465d}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.box{background:#181e25;padding:8px;border-radius:6px;font-size:12px}.box b{display:block;font-size:14px}
-.tf-badge{display:inline-block;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;margin-left:8px;background:#2b313a}
-.tf-4H{background:#8a2be2;color:#fff}
-.tf-1H{background:#f39c12;color:#fff}
-.tf-15M{background:#2980b9;color:#fff}
-.info-row{display:flex;justify-content:space-between;font-size:11px;color:#848e9c;margin-top:8px;padding-top:6px;border-top:1px dashed #2b313a}
-#status{margin-top:8px;font-size:13px;color:#848e9c}
+#signals{height:79vh;overflow:auto}
+.card{background:#0e1217;border:1px solid #1c232d;border-left:5px solid #0ecb81;border-radius:8px;padding:12px;margin-bottom:10px;box-shadow:0 4px 12px rgba(0,0,0,0.3)}
+.short{border-left-color:#f6465d}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.score-badge{padding:4px 8px;border-radius:6px;font-weight:800;font-size:12px}
+.score-high{background:#0ecb8122;color:#0ecb81;border:1px solid #0ecb81}
+.score-mid{background:#f39c1222;color:#f39c12;border:1px solid #f39c12}
+.score-low{background:#f6465d22;color:#f6465d;border:1px solid #f6465d}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
+.box{background:#141921;padding:6px 8px;border-radius:5px;font-size:11px;color:#848e9c}.box b{display:block;font-size:13px;color:#fff;margin-top:2px}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.tag{background:#1c232d;padding:2px 6px;border-radius:4px;font-size:10px;color:#b7bdc6}
+.info-row{display:flex;justify-content:space-between;font-size:11px;color:#848e9c;padding-top:6px;border-top:1px dashed #1c232d;margin-top:6px}
+#status{font-size:12px;color:#848e9c}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h2>⚡ Bybit MTF OrderFlow Scanner (4H / 1H / 15M → 5M Trigger)</h2>
-  <button onclick="start()">▶ Старт</button> 
-  <button class="stop" onclick="stop()">⏹ Стоп</button> 
-  <button class="clear" onclick="clearCards()">🗑 Очистить</button>
-  <div id="status">Статус: ожидание</div>
+  <div>
+    <h3 style="margin:0 0 4px 0">⚡ OrderFlow v10 PRO (Institutional Grade)</h3>
+    <div id="status">Статус: Готов к работе</div>
+  </div>
+  <div>
+    <button onclick="start()">▶ Старт</button> 
+    <button class="stop" onclick="stop()">⏹ Стоп</button> 
+    <button class="clear" onclick="clearCards()">🗑 Очистить</button>
+  </div>
 </div>
 
-<div id="signals"><div>Нажмите «Старт» для анализа старших таймфреймов и стакана...</div></div>
+<div id="signals"><div>Нажмите «Старт» для запуска профессионального анализа OrderFlow...</div></div>
 
 <script>
-const DEPTH = 50, TOP = 80, SIGNAL_TTL_MS = 900000; // TTL: 15 минут
-let run = false, ws = [], pingInterval = null, managerInterval = null;
-let books = new Map(), swings = new Map(), trades = new Map(), signals = new Map(), symbols = [], metrics = new Map();
+const DEPTH = 50, TOP = 80, SIGNAL_TTL_MS = 900000;
+let run = false, ws = [], pingInterval = null, managerInterval = null, swingsInterval = null, debounceInterval = null;
+
+let books = new Map(), zones = new Map(), trades = new Map(), signals = new Map(), cooldowns = new Map(), symbols = [], metrics = new Map();
+let wallTracker = new Map(), pendingSymbols = new Set();
 
 const S = document.getElementById("signals");
 const ST = document.getElementById("status");
@@ -45,7 +57,7 @@ const pf = v => Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4);
 async function start() {
     if (run) return;
     run = true;
-    ST.textContent = "Загрузка топ монет и разметка уровней HTF (4H, 1H, 15M)...";
+    ST.textContent = "Инициализация списка монет и зон HTF (4H, 1H, 15M)...";
 
     try {
         const r = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
@@ -56,18 +68,29 @@ async function start() {
             .filter(x => x.symbol.endsWith("USDT") && !ex.has(x.symbol))
             .sort((a, b) => +b.turnover24h - +a.turnover24h)
             .slice(0, TOP)
-            .map((x, i) => (metrics.set(x.symbol, { rank: i + 1, turn: +x.turnover24h }), x.symbol));
+            .map((x, i) => (metrics.set(x.symbol, { rank: i + 1, turn: +x.turnover24h, tickSize: +x.tickSize || 0.01 }), x.symbol));
 
         let loaded = 0;
         for (const s of symbols) {
             await loadSwings(s);
             loaded++;
-            ST.textContent = `Загрузка уровней HTF: ${loaded}/${symbols.length} монет`;
-            await new Promise(r => setTimeout(r, 35));
+            ST.textContent = `Разметка зон HTF: ${loaded}/${symbols.length} монет`;
+            await new Promise(r => setTimeout(r, 20));
         }
 
         connect();
         startSignalManager();
+        startDebounceEngine();
+        
+        // Фоновое обновление зон каждые 5 минут
+        swingsInterval = setInterval(async () => {
+            if (!run) return;
+            for (const s of symbols) {
+                await loadSwings(s);
+                await new Promise(r => setTimeout(r, 15));
+            }
+        }, 300000);
+
         ST.textContent = `Мониторинг запущен (${symbols.length} монет)`;
     } catch (e) {
         ST.textContent = "Ошибка инициализации API";
@@ -90,25 +113,51 @@ async function loadSwings(sym) {
         const k15m = parseK(r15m.result?.list);
         const k5m = parseK(r5m.result?.list);
 
-        let levels = [];
+        let rawLevels = [];
 
-        const extractFractals = (k, tf, weight) => {
+        const extract = (k, tf, weight) => {
             for (let i = 2; i < k.length - 2; i++) {
                 if (k[i].h > k[i-1].h && k[i].h > k[i+1].h && k[i].h > k[i-2].h && k[i].h > k[i+2].h) {
-                    levels.push({ price: k[i].h, side: "SHORT", tf, weight });
+                    rawLevels.push({ price: k[i].h, side: "SHORT", tf, weight });
                 }
                 if (k[i].l < k[i-1].l && k[i].l < k[i+1].l && k[i].l < k[i-2].l && k[i].l < k[i+2].l) {
-                    levels.push({ price: k[i].l, side: "LONG", tf, weight });
+                    rawLevels.push({ price: k[i].l, side: "LONG", tf, weight });
                 }
             }
         };
 
-        extractFractals(k4h, "4H", 3);
-        extractFractals(k1h, "1H", 2);
-        extractFractals(k15m, "15M", 1);
+        extract(k4h, "4H", 3);
+        extract(k1h, "1H", 2);
+        extract(k15m, "15M", 1);
 
-        swings.set(sym, { levels, k5m });
+        // Объединяем близкие уровни (в пределах 0.35%) в Зоны Поддержки/Сопротивления
+        const mergedZones = buildZones(rawLevels);
+        zones.set(sym, { zones: mergedZones, k5m });
     } catch (e) {}
+}
+
+function buildZones(raw) {
+    const longs = raw.filter(l => l.side === "LONG").sort((a,b) => a.price - b.price);
+    const shorts = raw.filter(l => l.side === "SHORT").sort((a,b) => a.price - b.price);
+
+    const merge = (arr) => {
+        const res = [];
+        for (const l of arr) {
+            if (!res.length) {
+                res.push({ min: l.price, max: l.price, tf: l.tf, weight: l.weight, side: l.side });
+                continue;
+            }
+            const last = res[res.length - 1];
+            if ((l.price - last.max) / last.max <= 0.0035) {
+                last.max = l.price;
+                if (l.weight > last.weight) { last.weight = l.weight; last.tf = l.tf; }
+            } else {
+                res.push({ min: l.price, max: l.price, tf: l.tf, weight: l.weight, side: l.side });
+            }
+        }
+        return res;
+    };
+    return [...merge(longs), ...merge(shorts)];
 }
 
 function connect() {
@@ -127,7 +176,7 @@ function connect() {
             for (let j = 0; j < a.length; j += 10) {
                 if (w.readyState === WebSocket.OPEN) {
                     w.send(JSON.stringify({ op: "subscribe", args: a.slice(j, j + 10) }));
-                    await new Promise(r => setTimeout(r, 80));
+                    await new Promise(r => setTimeout(r, 60));
                 }
             }
         };
@@ -153,24 +202,35 @@ function connect() {
 }
 
 function ob(s, d) {
-    let b = books.get(s) || { b: new Map(), a: new Map(), last: 0 };
+    let b = books.get(s) || { b: new Map(), a: new Map(), last: 0, seq: 0, valid: false };
 
+    // 1. Проверка последовательности пакетов (seq / u)
     if (d.type === "snapshot") {
         b.b.clear(); b.a.clear();
         d.data.b.forEach(o => b.b.set(+o[0], +o[1]));
         d.data.a.forEach(o => b.a.set(+o[0], +o[1]));
+        b.seq = d.data.u;
+        b.valid = true;
     } else if (d.type === "delta") {
+        if (!b.valid) return;
+        if (d.data.u <= b.seq) return; // Игнорируем устаревший пакет
+        if (d.data.u !== b.seq + 1 && b.seq !== 0) {
+            // Рассинхрон! Потерян пакет -> маркируем стакан невалидным
+            b.valid = false;
+            return;
+        }
         d.data.b.forEach(o => +o[1] ? b.b.set(+o[0], +o[1]) : b.b.delete(+o[0]));
         d.data.a.forEach(o => +o[1] ? b.a.set(+o[0], +o[1]) : b.a.delete(+o[0]));
+        b.seq = d.data.u;
     }
 
     books.set(s, b);
-    scan(s);
+    pendingSymbols.add(s);
 }
 
 function tr(s, l) {
     if (!l || !l.length) return;
-    let b = books.get(s) || { b: new Map(), a: new Map(), last: 0 };
+    let b = books.get(s) || { b: new Map(), a: new Map(), last: 0, seq: 0, valid: false };
     b.last = +l[0].p; 
     books.set(s, b);
 
@@ -178,8 +238,21 @@ function tr(s, l) {
     const arr = trades.get(s);
 
     l.forEach(x => arr.push({ p: +x.p, val: +x.p * +x.v, side: x.S, t: x.T || now() }));
-    while (arr.length && arr[0].t < now() - 15000) arr.shift();
-    scan(s);
+    while (arr.length && arr[0].t < now() - 20000) arr.shift(); // Храним последние 20 сек
+    
+    pendingSymbols.add(s);
+}
+
+// 120ms Debounce Engine для снижения нагрузки
+function startDebounceEngine() {
+    if (debounceInterval) clearInterval(debounceInterval);
+    debounceInterval = setInterval(() => {
+        if (!run || !pendingSymbols.size) return;
+        for (const s of pendingSymbols) {
+            scan(s);
+        }
+        pendingSymbols.clear();
+    }, 120);
 }
 
 function atr(k) {
@@ -191,69 +264,170 @@ function atr(k) {
     return t / (k.length - 1);
 }
 
-function cluster(map, p, s) {
+// 2. Поиск Peak Density Cluster (Ядро ликвидности)
+function getPeakCluster(map, centerPrice, symbol) {
     if (!map || map.size === 0) return null;
-    let total = 0, peak = p, m = 0;
-    for (const [k, q] of map) {
-        if (Math.abs(k - p) / p <= 0.005) {
-            let u = k * q;
-            total += u;
-            if (u > m) { m = u; peak = k; }
+    const tick = metrics.get(symbol)?.tickSize || 0.01;
+    let windowUsd = 0, peakPrice = centerPrice, peakUsd = 0;
+
+    for (const [p, q] of map) {
+        if (Math.abs(p - centerPrice) / centerPrice <= 0.003) {
+            let u = p * q;
+            windowUsd += u;
+            if (u > peakUsd) { peakUsd = u; peakPrice = p; }
         }
     }
-    let minThreshold = Math.max(12000, (metrics.get(s)?.turn || 5e6) / 1440 * 1.5);
-    if (total < minThreshold) return null;
-    return { usd: total, price: peak, min: peak * 0.998, max: peak * 1.002 };
+
+    if (peakUsd === 0 || windowUsd === 0) return null;
+
+    // Считаем ядро (Peak ± 2 тика)
+    let coreUsd = 0;
+    for (const [p, q] of map) {
+        if (Math.abs(p - peakPrice) <= tick * 2.5) {
+            coreUsd += p * q;
+        }
+    }
+
+    const concentrationRatio = coreUsd / windowUsd;
+    const minThreshold = Math.max(15000, (metrics.get(symbol)?.turn || 5e6) / 1440 * 2.0);
+
+    // Фильтр: Должна быть высокая концентрация ликвидности в ядре (>= 60%)
+    if (coreUsd < minThreshold || concentrationRatio < 0.60) return null;
+
+    return { peakPrice, coreUsd, windowUsd, concentrationRatio };
+}
+
+// 3. Анализ CVD (Cumulative Volume Delta)
+function getCvd(symbol) {
+    const arr = trades.get(symbol) || [];
+    let buyVol = 0, sellVol = 0;
+    for (const t of arr) {
+        if (t.side === "Buy") buyVol += t.val;
+        else if (t.side === "Sell") sellVol += t.val;
+    }
+    return { buyVol, sellVol, delta: buyVol - sellVol };
+}
+
+// 4. Расчет истинного Absorption Ratio и учет возраста стены
+function analyzeWall(symbol, clusterPrice, side, currentCoreUsd) {
+    const key = `${symbol}_${side}_${clusterPrice.toFixed(4)}`;
+    let tracker = wallTracker.get(key);
+
+    if (!tracker) {
+        tracker = { firstSeen: now(), lastSeen: now(), maxUsd: currentCoreUsd };
+        wallTracker.set(key, tracker);
+    } else {
+        tracker.lastSeen = now();
+        if (currentCoreUsd > tracker.maxUsd) tracker.maxUsd = currentCoreUsd;
+    }
+
+    const wallAgeSec = (tracker.lastSeen - tracker.firstSeen) / 1000;
+
+    // Считаем объем покупок/продаж, ударивших строго в эту стенку
+    let mktHitUsd = 0;
+    for (const t of (trades.get(symbol) || [])) {
+        const isTarget = side === "LONG" ? t.side === "Sell" : t.side === "Buy";
+        if (isTarget && Math.abs(t.p - clusterPrice) / clusterPrice < 0.002) {
+            mktHitUsd += t.val;
+        }
+    }
+
+    const wallEaten = Math.max(0, tracker.maxUsd - currentCoreUsd);
+    let absorptionRatio = wallEaten > 0 ? mktHitUsd / wallEaten : (mktHitUsd > 0 ? 1.0 : 0);
+
+    // Защита от спуфинга: если стенка ушла без маркет-ударов
+    const isSpoof = wallEaten > mktHitUsd * 2.5 && currentCoreUsd < tracker.maxUsd * 0.3;
+
+    return { wallAgeSec, absorptionRatio, mktHitUsd, isSpoof };
 }
 
 function scan(s) {
-    const b = books.get(s), sw = swings.get(s);
-    if (!b || !sw || !b.last) return;
+    const b = books.get(s), zd = zones.get(s);
+    if (!b || !b.valid || !zd || !b.last) return;
 
-    // 1. Фильтр: Ищем уровни HTF (4H/1H/15M) вблизи текущей цены (дистанция до 0.4%)
-    const nearHTF = sw.levels.filter(l => Math.abs(b.last - l.price) / l.price <= 0.004);
-    if (nearHTF.length === 0) return;
+    // 5. Ищем HTF Зоны с адаптивным окном допуска в зависимости от таймфрейма
+    const activeZones = zd.zones.filter(z => {
+        const tol = z.tf === "4H" ? 0.007 : (z.tf === "1H" ? 0.0045 : 0.0025);
+        return b.last >= z.min * (1 - tol) && b.last <= z.max * (1 + tol);
+    });
 
-    for (const lvl of nearHTF) {
-        const key = `${s}_${lvl.tf}_${lvl.side}_${lvl.price}`;
-        
-        // 2. Ищем подкрепление лимитным кластером на 5M около уровня
-        const c = cluster(lvl.side === "LONG" ? b.b : b.a, lvl.price, s);
+    if (!activeZones.length) return;
+
+    for (const z of activeZones) {
+        const cdKey = `${s}_${z.side}`;
+        if (cooldowns.has(cdKey) && now() < cooldowns.get(cdKey)) continue;
+
+        const centerPrice = z.side === "LONG" ? z.min : z.max;
+        const c = getPeakCluster(z.side === "LONG" ? b.b : b.a, centerPrice, s);
         if (!c) continue;
 
-        // 3. Проверка ленты сделок (активность поглощения)
-        let hits = 0, abs = 0;
-        for (const t of (trades.get(s) || [])) {
-            const hit = lvl.side === "LONG" ? t.side === "Sell" : t.side === "Buy";
-            if (hit && Math.abs(t.p - c.price) / c.price < 0.003) {
-                hits++;
-                abs += t.val;
-            }
-        }
-        if (hits < 2 && abs < 4000) continue;
+        const wallAnalysis = analyzeWall(s, c.peakPrice, z.side, c.coreUsd);
+        if (wallAnalysis.isSpoof) continue; // Игнорируем спуфинг
 
-        if (signals.has(key)) continue;
+        const atrVal = atr(zd.k5m);
+        
+        // 6. Подтверждение отскока (0.15 ATR Bounce Check)
+        const bounceDist = Math.abs(b.last - c.peakPrice);
+        const hasBounced = z.side === "LONG" ? (b.last >= c.peakPrice + atrVal * 0.15) : (b.last <= c.peakPrice - atrVal * 0.15);
+        if (!hasBounced) continue; // Ждем реакции цены!
 
-        // 4. Расчет SL и TP на основе структуры HTF и ATR 5M
-        const A = atr(sw.k5m);
-        const sl = lvl.side === "LONG" ? c.min - A * 0.3 : c.max + A * 0.3;
+        // 7. Фильтр по дельте (CVD)
+        const cvd = getCvd(s);
+        const cvdOk = z.side === "LONG" ? cvd.delta >= -5000 : cvd.delta <= 5000;
+        if (!cvdOk) continue;
+
+        // 8. Расчет Institutional Quality Score (0–100)
+        let score = 0;
+        let reasons = [];
+
+        if (z.tf === "4H") { score += 30; reasons.push("Зона 4H"); }
+        else if (z.tf === "1H") { score += 20; reasons.push("Зона 1H"); }
+        else { score += 10; reasons.push("Зона 15M"); }
+
+        if (c.concentrationRatio >= 0.75) { score += 20; reasons.push(`Ядро ${(c.concentrationRatio*100).toFixed(0)}%`); }
+        else { score += 10; reasons.push(`Ядро ${(c.concentrationRatio*100).toFixed(0)}%`); }
+
+        if (wallAnalysis.wallAgeSec >= 120) { score += 15; reasons.push("Стена > 2 мин"); }
+        else if (wallAnalysis.wallAgeSec >= 30) { score += 10; reasons.push("Стена > 30 сек"); }
+
+        if (wallAnalysis.absorptionRatio >= 0.8) { score += 15; reasons.push("Активный Absorption"); }
+        if (cvdOk) { score += 10; reasons.push("CVD Подтверждение"); }
+        if (hasBounced) { score += 10; reasons.push("Реакция 0.15 ATR"); }
+
+        // Расчет Адаптивного SL & TP
+        const slMult = z.tf === "4H" ? 0.5 : (z.tf === "1H" ? 0.35 : 0.25);
+        const sl = z.side === "LONG" ? c.peakPrice - atrVal * slMult : c.peakPrice + atrVal * slMult;
         const risk = Math.abs(b.last - sl);
 
-        // Расчет Target R:R 1:3 для HTF сетапов
-        const tp = lvl.side === "LONG" ? b.last + (risk * 3) : b.last - (risk * 3);
+        const tp1 = z.side === "LONG" ? b.last + (risk * 2.0) : b.last - (risk * 2.0);
+        const tp2 = z.side === "LONG" ? b.last + (risk * 3.5) : b.last - (risk * 3.5);
 
-        signals.set(key, {
-            key,
+        const sigKey = `${s}_${z.side}_${z.min.toFixed(4)}`;
+        
+        if (signals.has(sigKey)) {
+            // Обновляем существующий сигнал
+            const currentSig = signals.get(sigKey);
+            currentSig.price = b.last;
+            currentSig.coreUsd = c.coreUsd;
+            currentSig.score = score;
+            currentSig.reasons = reasons;
+            continue;
+        }
+
+        signals.set(sigKey, {
+            key: sigKey,
             symbol: s,
-            side: lvl.side,
-            tf: lvl.tf,
-            weight: lvl.weight,
+            side: z.side,
+            tf: z.tf,
+            score,
             price: b.last,
-            levelPrice: lvl.price,
+            zoneStr: `${pf(z.min)} - ${pf(z.max)}`,
+            peakPrice: c.peakPrice,
             sl,
-            tp,
-            clusterUsd: c.usd,
-            rr: "1:3",
+            tp1,
+            tp2,
+            coreUsd: c.coreUsd,
+            reasons,
             created: now()
         });
 
@@ -264,15 +438,18 @@ function scan(s) {
 function startSignalManager() {
     if (managerInterval) clearInterval(managerInterval);
     managerInterval = setInterval(() => {
-        if (!run || signals.size === 0) return;
-
+        if (!run) return;
         let changed = false;
         const currentTime = now();
+
+        for (const [cdKey, expireTime] of cooldowns.entries()) {
+            if (currentTime > expireTime) cooldowns.delete(cdKey);
+        }
 
         for (const [key, sig] of signals.entries()) {
             const b = books.get(sig.symbol);
 
-            // 1. Истечение времени жизни
+            // TTL 15 минут
             if (currentTime - sig.created > SIGNAL_TTL_MS) {
                 signals.delete(key);
                 changed = true;
@@ -281,56 +458,62 @@ function startSignalManager() {
 
             if (!b || !b.last) continue;
 
-            // 2. Инвалидация при уходе цены за пределы структуры (более 1.2%)
-            if (Math.abs(b.last - sig.levelPrice) / sig.levelPrice > 0.012) {
+            // Инвалидация при пробое структуры (> 1.2%)
+            if (Math.abs(b.last - sig.peakPrice) / sig.peakPrice > 0.012) {
                 signals.delete(key);
-                changed = true;
-                continue;
-            }
-
-            // 3. Проверка расформирования кластера в стакане (< 35% от первичного)
-            const sourceMap = sig.side === "LONG" ? b.b : b.a;
-            const currentCluster = cluster(sourceMap, sig.levelPrice, sig.symbol);
-            if (!currentCluster || currentCluster.usd < sig.clusterUsd * 0.35) {
-                signals.delete(key);
+                cooldowns.set(`${sig.symbol}_${sig.side}`, currentTime + 45000);
                 changed = true;
             }
         }
 
         if (changed) render();
-    }, 1500);
+    }, 1000);
 }
 
 function render() {
     if (!signals.size) {
-        S.innerHTML = "<div>Мониторинг HTF уровней и стакана. Ожидание сетапов...</div>";
+        S.innerHTML = "<div>Мониторинг институциональных зон и стакана. Ожидание сетапов high-quality...</div>";
         return;
     }
 
-    // Сортировка сигналов по важности таймфрейма (4H -> 1H -> 15M)
-    const sorted = [...signals.values()].sort((a,b) => b.weight - a.weight || b.created - a.created);
+    const sorted = [...signals.values()].sort((a,b) => b.score - a.score || b.created - a.created);
 
-    S.innerHTML = sorted.slice(0, 15).map(x => `
-        <div class="card ${x.side === "SHORT" ? "short" : ""}">
-            <h3>${x.symbol} — ${x.side} <span class="tf-badge tf-${x.tf}">Уровень ${x.tf}</span></h3>
-            <div class="grid">
-                <div class="box">Вход<b>${pf(x.price)}</b></div>
-                <div class="box">Уровень HTF<b>${pf(x.levelPrice)}</b></div>
-                <div class="box">SL<b>${pf(x.sl)}</b></div>
-                <div class="box">TP (R:R ${x.rr})<b>${pf(x.tp)}</b></div>
+    S.innerHTML = sorted.slice(0, 15).map(x => {
+        const scoreClass = x.score >= 80 ? "score-high" : (x.score >= 60 ? "score-mid" : "score-low");
+        return `
+            <div class="card ${x.side === "SHORT" ? "short" : ""}">
+                <div class="card-head">
+                    <div>
+                        <b style="font-size:15px">${x.symbol}</b> 
+                        <span style="color:${x.side === "LONG" ? "#0ecb81" : "#f6465d"};font-weight:700;margin-left:6px">${x.side}</span>
+                    </div>
+                    <div class="score-badge ${scoreClass}">SCORE: ${x.score}/100</div>
+                </div>
+                <div class="grid">
+                    <div class="box">Вход<b>${pf(x.price)}</b></div>
+                    <div class="box">Зона ${x.tf}<b>${x.zoneStr}</b></div>
+                    <div class="box">SL<b>${pf(x.sl)}</b></div>
+                    <div class="box">TP1 (2R)<b>${pf(x.tp1)}</b></div>
+                    <div class="box">TP2 (3.5R)<b>${pf(x.tp2)}</b></div>
+                </div>
+                <div class="tags">
+                    ${x.reasons.map(r => `<span class="tag">✔ ${r}</span>`).join("")}
+                </div>
+                <div class="info-row">
+                    <span>Плотность Ядра: $${Math.round(x.coreUsd).toLocaleString()}</span>
+                    <span>Пик: ${pf(x.peakPrice)}</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span>Плотность 5M: $${Math.round(x.clusterUsd).toLocaleString()}</span>
-                <span>Статус: Подтвержден стаканом</span>
-            </div>
-        </div>
-    `).join("");
+        `;
+    }).join("");
 }
 
 function stop() {
     run = false;
     if (pingInterval) clearInterval(pingInterval);
     if (managerInterval) clearInterval(managerInterval);
+    if (swingsInterval) clearInterval(swingsInterval);
+    if (debounceInterval) clearInterval(debounceInterval);
     ws.forEach(x => { try { x.close(); } catch(e){} });
     ws = [];
     ST.textContent = "Сканер остановлен.";
