@@ -82,7 +82,6 @@ async function start() {
         startSignalManager();
         startDebounceEngine();
         
-        // Фоновое обновление зон каждые 5 минут
         swingsInterval = setInterval(async () => {
             if (!run) return;
             for (const s of symbols) {
@@ -130,7 +129,6 @@ async function loadSwings(sym) {
         extract(k1h, "1H", 2);
         extract(k15m, "15M", 1);
 
-        // Объединяем близкие уровни (в пределах 0.35%) в Зоны Поддержки/Сопротивления
         const mergedZones = buildZones(rawLevels);
         zones.set(sym, { zones: mergedZones, k5m });
     } catch (e) {}
@@ -204,7 +202,6 @@ function connect() {
 function ob(s, d) {
     let b = books.get(s) || { b: new Map(), a: new Map(), last: 0, seq: 0, valid: false };
 
-    // 1. Проверка последовательности пакетов (seq / u)
     if (d.type === "snapshot") {
         b.b.clear(); b.a.clear();
         d.data.b.forEach(o => b.b.set(+o[0], +o[1]));
@@ -213,9 +210,8 @@ function ob(s, d) {
         b.valid = true;
     } else if (d.type === "delta") {
         if (!b.valid) return;
-        if (d.data.u <= b.seq) return; // Игнорируем устаревший пакет
+        if (d.data.u <= b.seq) return;
         if (d.data.u !== b.seq + 1 && b.seq !== 0) {
-            // Рассинхрон! Потерян пакет -> маркируем стакан невалидным
             b.valid = false;
             return;
         }
@@ -238,12 +234,11 @@ function tr(s, l) {
     const arr = trades.get(s);
 
     l.forEach(x => arr.push({ p: +x.p, val: +x.p * +x.v, side: x.S, t: x.T || now() }));
-    while (arr.length && arr[0].t < now() - 20000) arr.shift(); // Храним последние 20 сек
+    while (arr.length && arr[0].t < now() - 20000) arr.shift();
     
     pendingSymbols.add(s);
 }
 
-// 120ms Debounce Engine для снижения нагрузки
 function startDebounceEngine() {
     if (debounceInterval) clearInterval(debounceInterval);
     debounceInterval = setInterval(() => {
@@ -264,7 +259,6 @@ function atr(k) {
     return t / (k.length - 1);
 }
 
-// 2. Поиск Peak Density Cluster (Ядро ликвидности)
 function getPeakCluster(map, centerPrice, symbol) {
     if (!map || map.size === 0) return null;
     const tick = metrics.get(symbol)?.tickSize || 0.01;
@@ -280,7 +274,6 @@ function getPeakCluster(map, centerPrice, symbol) {
 
     if (peakUsd === 0 || windowUsd === 0) return null;
 
-    // Считаем ядро (Peak ± 2 тика)
     let coreUsd = 0;
     for (const [p, q] of map) {
         if (Math.abs(p - peakPrice) <= tick * 2.5) {
@@ -291,13 +284,11 @@ function getPeakCluster(map, centerPrice, symbol) {
     const concentrationRatio = coreUsd / windowUsd;
     const minThreshold = Math.max(15000, (metrics.get(symbol)?.turn || 5e6) / 1440 * 2.0);
 
-    // Фильтр: Должна быть высокая концентрация ликвидности в ядре (>= 60%)
     if (coreUsd < minThreshold || concentrationRatio < 0.60) return null;
 
     return { peakPrice, coreUsd, windowUsd, concentrationRatio };
 }
 
-// 3. Анализ CVD (Cumulative Volume Delta)
 function getCvd(symbol) {
     const arr = trades.get(symbol) || [];
     let buyVol = 0, sellVol = 0;
@@ -308,7 +299,6 @@ function getCvd(symbol) {
     return { buyVol, sellVol, delta: buyVol - sellVol };
 }
 
-// 4. Расчет истинного Absorption Ratio и учет возраста стены
 function analyzeWall(symbol, clusterPrice, side, currentCoreUsd) {
     const key = `${symbol}_${side}_${clusterPrice.toFixed(4)}`;
     let tracker = wallTracker.get(key);
@@ -323,7 +313,6 @@ function analyzeWall(symbol, clusterPrice, side, currentCoreUsd) {
 
     const wallAgeSec = (tracker.lastSeen - tracker.firstSeen) / 1000;
 
-    // Считаем объем покупок/продаж, ударивших строго в эту стенку
     let mktHitUsd = 0;
     for (const t of (trades.get(symbol) || [])) {
         const isTarget = side === "LONG" ? t.side === "Sell" : t.side === "Buy";
@@ -335,7 +324,6 @@ function analyzeWall(symbol, clusterPrice, side, currentCoreUsd) {
     const wallEaten = Math.max(0, tracker.maxUsd - currentCoreUsd);
     let absorptionRatio = wallEaten > 0 ? mktHitUsd / wallEaten : (mktHitUsd > 0 ? 1.0 : 0);
 
-    // Защита от спуфинга: если стенка ушла без маркет-ударов
     const isSpoof = wallEaten > mktHitUsd * 2.5 && currentCoreUsd < tracker.maxUsd * 0.3;
 
     return { wallAgeSec, absorptionRatio, mktHitUsd, isSpoof };
@@ -345,38 +333,51 @@ function scan(s) {
     const b = books.get(s), zd = zones.get(s);
     if (!b || !b.valid || !zd || !b.last) return;
 
-    // 5. Ищем HTF Зоны с адаптивным окном допуска в зависимости от таймфрейма
+    // 1. Фильтр HTF Зон с зауженными допусками (4H = 0.4%, 1H = 0.25%, 15M = 0.15%)
     const activeZones = zd.zones.filter(z => {
-        const tol = z.tf === "4H" ? 0.007 : (z.tf === "1H" ? 0.0045 : 0.0025);
+        const tol = z.tf === "4H" ? 0.004 : (z.tf === "1H" ? 0.0025 : 0.0015);
         return b.last >= z.min * (1 - tol) && b.last <= z.max * (1 + tol);
     });
 
     if (!activeZones.length) return;
 
+    // 2. ЗАЩИТА ОТ ВИЛОК: Проверка ширины канала (зажима между стенками)
+    const longZone = zd.zones.find(z => z.side === "LONG" && Math.abs(b.last - z.max) / b.last <= 0.01);
+    const shortZone = zd.zones.find(z => z.side === "SHORT" && Math.abs(b.last - z.min) / b.last <= 0.01);
+
+    if (longZone && shortZone) {
+        const channelWidth = (shortZone.min - longZone.max) / b.last;
+        if (channelWidth < 0.008) return; // Игнорируем зажатые монеты
+    }
+
     for (const z of activeZones) {
         const cdKey = `${s}_${z.side}`;
         if (cooldowns.has(cdKey) && now() < cooldowns.get(cdKey)) continue;
+
+        // Блокировка противоположного активного сигнала по одной монете
+        const oppositeSide = z.side === "LONG" ? "SHORT" : "LONG";
+        const hasOppositeSignal = [...signals.values()].some(sig => sig.symbol === s && sig.side === oppositeSide);
+        if (hasOppositeSignal) continue;
 
         const centerPrice = z.side === "LONG" ? z.min : z.max;
         const c = getPeakCluster(z.side === "LONG" ? b.b : b.a, centerPrice, s);
         if (!c) continue;
 
         const wallAnalysis = analyzeWall(s, c.peakPrice, z.side, c.coreUsd);
-        if (wallAnalysis.isSpoof) continue; // Игнорируем спуфинг
+        if (wallAnalysis.isSpoof) continue;
 
         const atrVal = atr(zd.k5m);
         
-        // 6. Подтверждение отскока (0.15 ATR Bounce Check)
-        const bounceDist = Math.abs(b.last - c.peakPrice);
+        // Подтверждение отскока (0.15 ATR)
         const hasBounced = z.side === "LONG" ? (b.last >= c.peakPrice + atrVal * 0.15) : (b.last <= c.peakPrice - atrVal * 0.15);
-        if (!hasBounced) continue; // Ждем реакции цены!
+        if (!hasBounced) continue;
 
-        // 7. Фильтр по дельте (CVD)
+        // Фильтр по CVD
         const cvd = getCvd(s);
         const cvdOk = z.side === "LONG" ? cvd.delta >= -5000 : cvd.delta <= 5000;
         if (!cvdOk) continue;
 
-        // 8. Расчет Institutional Quality Score (0–100)
+        // Расчет Score (0–100)
         let score = 0;
         let reasons = [];
 
@@ -394,7 +395,6 @@ function scan(s) {
         if (cvdOk) { score += 10; reasons.push("CVD Подтверждение"); }
         if (hasBounced) { score += 10; reasons.push("Реакция 0.15 ATR"); }
 
-        // Расчет Адаптивного SL & TP
         const slMult = z.tf === "4H" ? 0.5 : (z.tf === "1H" ? 0.35 : 0.25);
         const sl = z.side === "LONG" ? c.peakPrice - atrVal * slMult : c.peakPrice + atrVal * slMult;
         const risk = Math.abs(b.last - sl);
@@ -405,7 +405,6 @@ function scan(s) {
         const sigKey = `${s}_${z.side}_${z.min.toFixed(4)}`;
         
         if (signals.has(sigKey)) {
-            // Обновляем существующий сигнал
             const currentSig = signals.get(sigKey);
             currentSig.price = b.last;
             currentSig.coreUsd = c.coreUsd;
@@ -449,7 +448,6 @@ function startSignalManager() {
         for (const [key, sig] of signals.entries()) {
             const b = books.get(sig.symbol);
 
-            // TTL 15 минут
             if (currentTime - sig.created > SIGNAL_TTL_MS) {
                 signals.delete(key);
                 changed = true;
@@ -458,7 +456,6 @@ function startSignalManager() {
 
             if (!b || !b.last) continue;
 
-            // Инвалидация при пробое структуры (> 1.2%)
             if (Math.abs(b.last - sig.peakPrice) / sig.peakPrice > 0.012) {
                 signals.delete(key);
                 cooldowns.set(`${sig.symbol}_${sig.side}`, currentTime + 45000);
