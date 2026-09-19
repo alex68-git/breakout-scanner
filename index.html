@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bybit OrderFlow Engine v7.0 GitHub</title>
+<title>Bybit Institutional OrderFlow Engine v7.0 (Single File)</title>
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; padding: 15px; background: #080a0c; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
@@ -34,7 +34,7 @@ button.clear { background: #2b313a; color: white; }
 <body>
 
 <div class="header">
-    <h1>⚡ OrderFlow Engine v7.0 (GitHub Ready)</h1>
+    <h1>⚡ OrderFlow Engine v7.0 (GitHub Standalone)</h1>
     <div class="controls">
         <button onclick="startEngine()">▶ Запустить Сканер</button>
         <button class="stop" onclick="stopEngine()">⏹ Стоп</button>
@@ -53,15 +53,329 @@ button.clear { background: #2b313a; color: white; }
 </div>
 
 <script>
-let worker = null;
-let running = false;
-const signals = new Map();
-const symbols = [];
-const metrics = [];
+// ============================================================================
+// CONFIG & STATE
+// ============================================================================
+const ORDERBOOK_DEPTH = 50;
+const LEVEL_COOLDOWN = 90000;
 
+let wsConnections = [];
+let symbols = [];
+let symbolMetrics = new Map();
+let running = false;
+
+const books = new Map();
+const swingLevels = new Map();
+const states = new Map();
+const cooldowns = new Map();
+const trades = new Map();
+const signals = new Map();
+
+function now() { return Date.now(); }
 function money(v) { return Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
 function price(v) { return Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4); }
 
+// ============================================================================
+// ENGINE LOGIC
+// ============================================================================
+function startGarbageCollector() {
+    setInterval(() => {
+        if (!running) return;
+        const currentTime = now();
+        for (const [key, timestamp] of cooldowns.entries()) {
+            if (currentTime > timestamp) cooldowns.delete(key);
+        }
+        for (const [key, state] of states.entries()) {
+            if (currentTime - state.lastTrade > 900000) states.delete(key);
+        }
+        for (const [symbol, buffer] of trades.entries()) {
+            const cutoff = currentTime - 30000;
+            while (buffer.length > 0 && buffer[0].t < cutoff) buffer.shift();
+            if (buffer.length === 0) trades.delete(symbol);
+        }
+    }, 10000);
+}
+
+function closeWS() {
+    wsConnections.forEach(ws => { try { ws.onclose=null; ws.close(); } catch(e){} });
+    wsConnections = [];
+}
+
+function initMultiWS() {
+    closeWS();
+    books.clear(); states.clear(); trades.clear();
+    const chunkSize = 25;
+    let activeWSCount = 0;
+
+    for (let i = 0; i < symbols.length; i += chunkSize) {
+        const group = symbols.slice(i, i + chunkSize);
+        createSingleWS(group, () => {
+            activeWSCount++;
+            document.getElementById("wsStatus").innerText = `${activeWSCount}/4`;
+            document.getElementById("wsStatus").style.color = "#0ecb81";
+        });
+    }
+}
+
+function createSingleWS(group, onOpenCb) {
+    const ws = new WebSocket("wss://stream.bybit.com/v5/public/linear");
+    wsConnections.push(ws);
+
+    ws.onopen = async () => {
+        if (onOpenCb) onOpenCb();
+        const args = [];
+        group.forEach(s => {
+            args.push(`orderbook.${ORDERBOOK_DEPTH}.${s}`);
+            args.push(`publicTrade.${s}`);
+        });
+
+        for (let i = 0; i < args.length; i += 20) {
+            ws.send(JSON.stringify({ op: "subscribe", args: args.slice(i, i + 20) }));
+            await new Promise(r => setTimeout(r, 80));
+        }
+    };
+
+    ws.onmessage = (e) => {
+        if (!running) return;
+        try {
+            const data = JSON.parse(e.data);
+            if (!data.topic) return;
+            const parts = data.topic.split('.');
+            const type = parts[0], symbol = parts[parts.length - 1];
+
+            if (type === 'orderbook') handleOrderbook(symbol, data);
+            else if (type === 'publicTrade') handleTrades(symbol, data.data);
+        } catch(err){}
+    };
+
+    ws.onclose = () => { if (running) setTimeout(() => createSingleWS(group, null), 3000); };
+}
+
+function handleOrderbook(symbol, data) {
+    let book = books.get(symbol);
+    if (data.type === 'snapshot') {
+        book = { bids: new Map(), asks: new Map(), lastPrice: 0 };
+        data.data.b.forEach(o => book.bids.set(parseFloat(o[0]), parseFloat(o[1])));
+        data.data.a.forEach(o => book.asks.set(parseFloat(o[0]), parseFloat(o[1])));
+        books.set(symbol, book);
+    } else if (data.type === 'delta') {
+        if (!book) return;
+        data.data.b.forEach(o => { 
+            const p=parseFloat(o[0]), q=parseFloat(o[1]); 
+            q===0 ? book.bids.delete(p) : book.bids.set(p,q); 
+        });
+        data.data.a.forEach(o => { 
+            const p=parseFloat(o[0]), q=parseFloat(o[1]); 
+            q===0 ? book.asks.delete(p) : book.asks.set(p,q); 
+        });
+    }
+    processEngine(symbol);
+}
+
+function handleTrades(symbol, tradeList) {
+    if (!tradeList || !tradeList.length) return;
+    const book = books.get(symbol);
+    if (book) book.lastPrice = parseFloat(tradeList[0].p);
+
+    if (!trades.has(symbol)) trades.set(symbol, []);
+    const buffer = trades.get(symbol);
+
+    tradeList.forEach(t => {
+        buffer.push({
+            p: parseFloat(t.p),
+            v: parseFloat(t.v),
+            val: parseFloat(t.p) * parseFloat(t.v),
+            side: t.S,
+            t: t.T || now()
+        });
+    });
+}
+
+function getCluster(sourceMap, targetPrice, symbol) {
+    if (!sourceMap || sourceMap.size === 0) return null;
+    let totalUsd = 0, peakPrice = targetPrice, maxUsd = 0, ticks = 0;
+    const minClusterSize = Math.max(10000, (symbolMetrics.get(symbol)?.turnover || 5000000) / 1440 * 1.2);
+
+    for (const [p, q] of sourceMap.entries()) {
+        if (Math.abs(p - targetPrice) / targetPrice <= 0.005) {
+            const usd = p * q;
+            totalUsd += usd;
+            ticks++;
+            if (usd > maxUsd) { maxUsd = usd; peakPrice = p; }
+        }
+    }
+
+    if (totalUsd < minClusterSize) return null;
+    return { usd: totalUsd, price: peakPrice, min: peakPrice * 0.998, max: peakPrice * 1.002, ticks };
+}
+
+function calcAbsorptionRatio(symbol, side, cluster) {
+    const buf = trades.get(symbol) || [];
+    let marketVol = 0;
+
+    buf.forEach(tr => {
+        const hit = side === "LONG" ? tr.side === "Sell" : tr.side === "Buy";
+        if (hit && Math.abs(tr.p - cluster.price) / cluster.price <= 0.003) {
+            marketVol += tr.val;
+        }
+    });
+
+    return marketVol / cluster.usd;
+}
+
+function detectSpoof(symbol, side, cluster) {
+    const book = books.get(symbol);
+    if (!book) return false;
+    const source = side === "LONG" ? book.bids : book.asks;
+    let currentTotal = 0;
+
+    for (const [p, q] of source.entries()) {
+        if (Math.abs(p - cluster.price) / cluster.price <= 0.005) {
+            currentTotal += p * q;
+        }
+    }
+
+    const remaining = currentTotal / cluster.usd;
+    if (remaining < 0.35) {
+        const ratio = calcAbsorptionRatio(symbol, side, cluster);
+        if (ratio < 0.15) return true; 
+    }
+    return false;
+}
+
+function detectLiquidityPull(symbol, side, cluster) {
+    const book = books.get(symbol);
+    if (!book) return false;
+    const source = side === "LONG" ? book.bids : book.asks;
+    let currentTotal = 0;
+
+    for (const [p, q] of source.entries()) {
+        if (Math.abs(p - cluster.price) / cluster.price <= 0.003) {
+            currentTotal += p * q;
+        }
+    }
+    return (currentTotal / cluster.usd) < 0.30;
+}
+
+function calcATR(k5m) {
+    if (!k5m || k5m.length < 2) return 0;
+    let trSum = 0;
+    for (let i = 1; i < k5m.length; i++) {
+        const tr = Math.max(k5m[i].h - k5m[i].l, Math.abs(k5m[i].h - k5m[i-1].c), Math.abs(k5m[i].l - k5m[i-1].c));
+        trSum += tr;
+    }
+    return trSum / (k5m.length - 1);
+}
+
+function processEngine(symbol) {
+    const book = books.get(symbol);
+    const swings = swingLevels.get(symbol);
+    if (!book || !swings || !book.lastPrice) return;
+
+    const levels = [
+        ...swings.lows.map(l => ({ p: l, side: 'LONG' })),
+        ...swings.highs.map(h => ({ p: h, side: 'SHORT' }))
+    ];
+
+    levels.forEach(l => {
+        const key = `${symbol}_${l.side}_${l.p}`;
+        if (cooldowns.has(key)) return;
+
+        const source = l.side === "LONG" ? book.bids : book.asks;
+        const c = getCluster(source, l.p, symbol);
+        if (!c) return;
+
+        let st = states.get(key) || { hits: 0, abs: 0, touch: false, min: book.lastPrice, max: book.lastPrice, lastTrade: 0, state: "TRACKING", entryPrice: 0, cluster: c };
+
+        const border = l.side === "LONG" ? c.max : c.min;
+        if (Math.abs(book.lastPrice - border) / border <= 0.0025) st.touch = true;
+
+        if (!st.touch) { states.set(key, st); return; }
+
+        st.min = Math.min(st.min, book.lastPrice);
+        st.max = Math.max(st.max, book.lastPrice);
+
+        const arr = trades.get(symbol) || [];
+        arr.forEach(t => {
+            if (t.t <= st.lastTrade) return;
+            const hit = l.side === "LONG" ? t.side === "Sell" : t.side === "Buy";
+            if (hit && t.p >= c.min * 0.995 && t.p <= c.max * 1.005) {
+                st.hits++;
+                st.abs += t.val;
+            }
+            st.lastTrade = Math.max(st.lastTrade, t.t);
+        });
+
+        const ATR = calcATR(swings.k5m);
+        const stop = l.side === "LONG" ? c.min - ATR * 0.2 : c.max + ATR * 0.2;
+        const bounce = l.side === "LONG" ? book.lastPrice - st.min : st.max - book.lastPrice;
+        const risk = Math.abs(book.lastPrice - stop);
+
+        const spoof = detectSpoof(symbol, l.side, c);
+        const pull = detectLiquidityPull(symbol, l.side, c);
+
+        if ((st.hits >= 2 || st.abs >= 5000) && bounce >= ATR * 0.15 && !spoof && !pull && st.state === "TRACKING") {
+            cooldowns.set(key, now() + LEVEL_COOLDOWN);
+            st.state = "ENTRY";
+            st.entryPrice = book.lastPrice;
+
+            signals.set(key, {
+                key, symbol, side: l.side,
+                state: "ENTRY",
+                price: book.lastPrice,
+                cluster: c.usd,
+                clusterPrice: c.price,
+                ticks: c.ticks,
+                hits: st.hits,
+                abs: st.abs,
+                sl: stop,
+                tp: book.lastPrice + (l.side === "LONG" ? risk * 2 : -risk * 2),
+                bounce,
+                atr: ATR
+            });
+            render();
+        }
+        states.set(key, st);
+    });
+}
+
+function startManager() {
+    setInterval(() => {
+        if (!running) return;
+        states.forEach((st, key) => {
+            if (st.state !== "ENTRY" && st.state !== "HOLD") return;
+            const book = books.get(st.symbol);
+            if (!book || !book.lastPrice) return;
+
+            const price = book.lastPrice;
+            const atr = st.atr || 0;
+
+            if (st.side === "LONG") {
+                if (price > st.entryPrice + atr * 0.4 && st.state !== "HOLD") {
+                    st.state = "HOLD";
+                    if(signals.has(key)) { signals.get(key).state = "HOLD"; signals.get(key).reason = "Уровень удержался"; render(); }
+                }
+                if (price < st.cluster.price - atr * 0.25 && st.state !== "BROKEN") {
+                    st.state = "BROKEN";
+                    if(signals.has(key)) { signals.get(key).state = "BROKEN"; signals.get(key).reason = "Уровень сломан"; render(); }
+                }
+            } else {
+                if (price < st.entryPrice - atr * 0.4 && st.state !== "HOLD") {
+                    st.state = "HOLD";
+                    if(signals.has(key)) { signals.get(key).state = "HOLD"; signals.get(key).reason = "Сопротивление удержалось"; render(); }
+                }
+                if (price > st.cluster.price + atr * 0.25 && st.state !== "BROKEN") {
+                    st.state = "BROKEN";
+                    if(signals.has(key)) { signals.get(key).state = "BROKEN"; signals.get(key).reason = "Сопротивление пробито"; render(); }
+                }
+            }
+        });
+    }, 700);
+}
+
+// ============================================================================
+// DATA FETCHING & INTERFACE
+// ============================================================================
 async function loadSwings(symbol) {
     try {
         const [r5, r60] = await Promise.all([
@@ -70,7 +384,6 @@ async function loadSwings(symbol) {
         ]);
 
         const j5 = await r5.json();
-        const j60 = await r60.json();
         if (!j5.result?.list) return;
 
         const k5 = j5.result.list.map(k => ({ h: +k[2], l: +k[3], c: +k[4] })).reverse();
@@ -81,38 +394,13 @@ async function loadSwings(symbol) {
             if (k5[i].l < k5[i-1].l && k5[i].l < k5[i-2].l && k5[i].l < k5[i+1].l && k5[i].l < k5[i+2].l) lows.push(k5[i].l);
         }
 
-        if (worker) {
-            worker.postMessage({ type: "SWING", payload: { symbol, data: { highs, lows, k5m: k5 } } });
-        }
+        swingLevels.set(symbol, { highs, lows, k5m: k5 });
     } catch(e){}
 }
 
 async function startEngine() {
     if (running) return;
     running = true;
-
-    // Подключение через отдельный файл без BLOB
-    worker = new Worker('worker.js');
-
-    worker.onmessage = e => {
-        const { type, payload } = e.data;
-        if (type === "WS") {
-            document.getElementById("wsStatus").innerText = payload;
-            document.getElementById("wsStatus").style.color = "#0ecb81";
-        }
-        if (type === "ENTRY") {
-            signals.set(payload.key, payload);
-            render();
-        }
-        if (type === "SIGNAL_UPDATE") {
-            if (signals.has(payload.key)) {
-                const s = signals.get(payload.key);
-                s.state = payload.state;
-                s.reason = payload.reason;
-                render();
-            }
-        }
-    };
 
     document.getElementById("emptyState").innerText = "Загрузка списка монет и уровней...";
 
@@ -127,29 +415,31 @@ async function startEngine() {
             .sort((a,b) => +b.turnover24h - +a.turnover24h)
             .slice(0, 100);
 
-        symbols.length = 0; metrics.length = 0;
-        for (let i = 0; i < list.length; i++) {
-            symbols.push(list[i].symbol);
-            metrics.push([list[i].symbol, { rank: i + 1, turnover: +list[i].turnover24h }]);
-        }
+        symbols = list.map(i => i.symbol);
+        list.forEach((item, idx) => {
+            symbolMetrics.set(item.symbol, { rank: idx + 1, turnover: +item.turnover24h });
+        });
 
         document.getElementById("coinCount").innerText = symbols.length;
 
         for (let i = 0; i < symbols.length; i++) {
             await loadSwings(symbols[i]);
-            await new Promise(r => setTimeout(r, 60));
+            await new Promise(r => setTimeout(r, 50));
         }
 
-        worker.postMessage({ type: "START", payload: { symbols, metrics } });
+        initMultiWS();
+        startGarbageCollector();
+        startManager();
+
         document.getElementById("emptyState").innerText = "Мониторинг запущен. Ожидание сигналов...";
     } catch(err) {
-        document.getElementById("emptyState").innerText = "Ошибка загрузки данных с Bybit. Проверьте соединение.";
+        document.getElementById("emptyState").innerText = "Ошибка загрузки данных Bybit. Проверьте сеть.";
     }
 }
 
 function stopEngine() {
     running = false;
-    if (worker) { worker.postMessage({ type: "STOP" }); worker.terminate(); worker = null; }
+    closeWS();
     document.getElementById("wsStatus").innerText = "0/4";
     document.getElementById("wsStatus").style.color = "#f6465d";
 }
