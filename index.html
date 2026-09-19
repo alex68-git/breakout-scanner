@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bybit Institutional OrderFlow Engine v6 (Production Ready)</title>
+<title>Bybit Institutional OrderFlow Engine v6.1 (Alts & Memes Edition)</title>
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; padding: 15px; background: #080a0c; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
@@ -38,7 +38,7 @@ button.clear { background: #2b313a; color: white; }
 <body>
 
 <div class="header">
-    <h1>⚡ Bybit Institutional OrderFlow Engine v6 (Production Ready)</h1>
+    <h1>⚡ Bybit Institutional OrderFlow Engine v6.1 (Alts & Memes)</h1>
     <div class="controls">
         <button onclick="startEngine()">▶ Запустить Сканер</button>
         <button class="stop" onclick="stopEngine()">⏹ Стоп</button>
@@ -118,15 +118,16 @@ function startGarbageCollector() {
     }, 5000);
 }
 
+// ДИНАМИЧЕСКИЙ РАСЧЕТ МИНИМАЛЬНОЙ ПЛОТНОСТИ (ДЛЯ АЛЬТОВ И МЕМОВ)
 function getMinClusterSize(symbol) {
-    const m = symbolMetrics.get(symbol) || { rank: 100, turnover: 10000000 };
-    let rankFloor = 50000;
-    if (m.rank <= 3) rankFloor = 800000;
-    else if (m.rank <= 15) rankFloor = 400000;
-    else if (m.rank <= 40) rankFloor = 200000;
-    else if (m.rank <= 80) rankFloor = 100000;
+    const m = symbolMetrics.get(symbol) || { turnover: 5000000 };
+    
+    // Рассчитываем эквивалент 1.5 минут среднеминутного торгового объема
+    const avgMinuteVolume = m.turnover / 1440;
+    let dynamicFloor = avgMinuteVolume * 1.5;
 
-    return Math.max(rankFloor, m.turnover * 0.00004);
+    // Ограничиваем разумными рамками для альткоинов/мемов: не менее $15,000 и не более $300,000
+    return Math.max(15000, Math.min(dynamicFloor, 300000));
 }
 
 function closeWS() {
@@ -187,7 +188,7 @@ function createSingleWS(group, onOpenCb) {
 }
 
 // ----------------------------------------------------------------------------
-// 3. ORDERBOOK SYNCHRONIZATION WITH SEQUENCE VALIDATION (u / seq)
+// 3. ORDERBOOK SYNCHRONIZATION
 // ----------------------------------------------------------------------------
 function handleOrderbook(symbol, data) {
     let book = books.get(symbol);
@@ -227,7 +228,7 @@ function handleOrderbook(symbol, data) {
 }
 
 // ----------------------------------------------------------------------------
-// 4. TRADES HANDLING WITH SINGLE-COUNT PROTECTION
+// 4. TRADES HANDLING
 // ----------------------------------------------------------------------------
 function handleTrades(symbol, trades) {
     if (!trades || !trades.length) return;
@@ -254,7 +255,7 @@ function handleTrades(symbol, trades) {
 }
 
 // ----------------------------------------------------------------------------
-// 5. MATHEMATICS: VOLATILITY (PERCENTAGE ATR) & PEAK DENSITY
+// 5. MATHEMATICS: VOLATILITY & PEAK DENSITY
 // ----------------------------------------------------------------------------
 function calculatePercentageATR(klines) {
     if (!klines || klines.length < 2) return 0;
@@ -350,7 +351,7 @@ function checkClusterDisappearance(symbol, book) {
 }
 
 // ----------------------------------------------------------------------------
-// 6. ENGINE LOGIC & SIGNAL GENERATOR (WITHOUT DOUBLE COUNT)
+// 6. ENGINE LOGIC & SIGNAL GENERATOR
 // ----------------------------------------------------------------------------
 function processEngine(symbol) {
     const book = books.get(symbol);
@@ -401,7 +402,6 @@ function processEngine(symbol) {
 
             let maxTradeTimeInBatch = state.lastProcessedTradeTime;
 
-            // Считывание поглощения строго без повторного подсчета (Double Count Guard)
             trades.forEach(t => {
                 if (t.t > state.lastProcessedTradeTime) {
                     const isHit = (lvl.side === 'LONG' && t.side === 'Sell') || 
@@ -431,7 +431,10 @@ function processEngine(symbol) {
 
             let sl = lvl.side === 'LONG' ? cluster.minPrice - (atrAbs5m * 0.15) : cluster.maxPrice + (atrAbs5m * 0.15);
 
-            if (state.hitsCount >= 1 && state.absorbedVol >= 8000 && actualBounce >= requiredBounce) {
+            // Адаптированный критерий поглощения под щиткоины/мемы
+            const minAbsorptionNeeded = Math.min(5000, minClusterSize * 0.1);
+
+            if (state.hitsCount >= 1 && state.absorbedVol >= minAbsorptionNeeded && actualBounce >= requiredBounce) {
                 const flowConfirm = lvl.side === 'LONG' ? (mktBuy > mktSell * 0.6) : (mktSell > mktBuy * 0.6);
                 
                 if (flowConfirm && state.status !== 'ENTRY') {
@@ -463,7 +466,7 @@ function processEngine(symbol) {
 `;
 
 // ============================================================================
-// MAIN THREAD: UI MANAGEMENT & RATE-LIMITED REST QUEUE
+// MAIN THREAD: UI MANAGEMENT & REST QUEUE
 // ============================================================================
 let worker = null;
 let running = false;
@@ -487,7 +490,6 @@ function playBeep() {
 
 function priceFormat(v) { return Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4); }
 
-// Безопасная загрузка свечей с 5-свечной моделью фракталов
 async function loadKlinesWithQueue(symbolList) {
     const total = symbolList.length;
     let completed = 0;
@@ -509,7 +511,6 @@ async function loadKlinesWithQueue(symbolList) {
 
                 const highs = [], lows = [];
                 
-                // Строгая пятисвечная модель Swing-уровней (i-2, i-1, i, i+1, i+2)
                 for (let i = 2; i < k5m.length - 2; i++) {
                     const isHigh = k5m[i].h > k5m[i-2].h && 
                                    k5m[i].h > k5m[i-1].h && 
@@ -539,7 +540,6 @@ async function loadKlinesWithQueue(symbolList) {
         document.getElementById("loadProgress").innerText = `${pct}%`;
         document.getElementById("progressFill").style.width = `${pct}%`;
 
-        // Задержка 120 мс между запросами против Rate Limit
         await new Promise(r => setTimeout(r, 120));
     }
 }
@@ -562,8 +562,8 @@ function updateCardDOM(s) {
 
         ${isEntry ? `
         <div class="grid">
-            <div class="box">Объем Кластера<strong>$${(s.clusterVal/1000000).toFixed(2)}M</strong></div>
-            <div class="box">Ударов в Ядро<strong>${s.hitsCount} раз</strong></div>             <div class="box">Поглощено (Absorption)<strong>$${(s.absorbedVol/1000).toFixed(0)}k</strong></div>
+            <div class="box">Объем Кластера<strong>$${(s.clusterVal/1000).toFixed(1)}k</strong></div>
+            <div class="box">Ударов в Ядро<strong>${s.hitsCount} раз</strong></div>              <div class="box">Поглощено (Absorption)<strong>$${(s.absorbedVol/1000).toFixed(1)}k</strong></div>
             <div class="box">Импульс (Bounce)<strong>+${(s.bounceDist*100).toFixed(2)}%</strong></div>
         </div>
         <div class="grid">
@@ -631,33 +631,38 @@ async function startEngine() {
         }
     };
 
-    document.getElementById("emptyState").innerText = "Загрузка топ-100 монет и инициализация свечей...";
+    document.getElementById("emptyState").innerText = "Фильтрация топ-монет и поиск альтов/мемов...";
     
-    // 1. Загрузка топ-100 монет по суточному объему
+    // 1. Загрузка списка всех тикеров Bybit USDT-Linear
     const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
     const json = await res.json();
     symbols.length = 0; symbolMetrics.clear();
 
+    // Список исключаемых тяжелых монет (Топ-5 по капитализации/объему)
+    const top5ToExclude = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"];
+
+    // Сортировка по суточному объему и исключение ТОП-5
     const list = json.result.list
         .filter(i => i.symbol.endsWith("USDT") && parseFloat(i.turnover24h) > 0)
+        .filter(i => !top5ToExclude.includes(i.symbol))
         .sort((a,b) => parseFloat(b.turnover24h) - parseFloat(a.turnover24h))
-        .slice(0, 100);
+        .slice(0, 100); // Берем следующие 100 активных альтов/мемов
 
     const metricsArr = [];
     list.forEach((item, idx) => {
         symbols.push(item.symbol);
-        const m = { rank: idx + 1, turnover: parseFloat(item.turnover24h) };
+        const m = { rank: idx + 6, turnover: parseFloat(item.turnover24h) };
         symbolMetrics.set(item.symbol, m);
         metricsArr.push([item.symbol, m]);
     });
     document.getElementById("coinCount").innerText = symbols.length;
 
-    // 2. Безопасная очередь загрузки свечей с задержкой
+    // 2. Инициализация свечей
     await loadKlinesWithQueue(symbols);
 
-    // 3. Запуск Worker и WebSocket сокетов
+    // 3. Запуск Worker и WebSocket
     worker.postMessage({ type: 'START', payload: { symbols, metrics: metricsArr } });
-    document.getElementById("emptyState").innerText = "Мониторинг запущен. Ожидание институциональных сигналов...";
+    document.getElementById("emptyState").innerText = "Мониторинг запущен. Сканируем альты и мемы...";
 }
 
 function stopEngine() {
