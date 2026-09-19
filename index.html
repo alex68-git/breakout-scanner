@@ -1,37 +1,272 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bybit Institutional OrderFlow v7 Lite</title>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bybit Institutional OrderFlow v7 Lite (Fixed)</title>
 <style>
 body{margin:0;background:#080a0c;color:#eaecef;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;padding:14px}
 .header{background:#12161c;border:1px solid #1e2630;border-radius:12px;padding:14px;margin-bottom:12px}
-button{background:#f0b90b;border:0;padding:10px 14px;border-radius:8px;font-weight:700}
+button{background:#f0b90b;border:0;padding:10px 14px;border-radius:8px;font-weight:700;cursor:pointer;margin-right:4px}
 .stop{background:#f6465d;color:#fff}.clear{background:#2b313a;color:#fff}
 #signals{height:78vh;overflow:auto}.card{background:#12161c;border:1px solid #1e2630;border-left:5px solid #0ecb81;border-radius:10px;padding:12px;margin-bottom:10px}
-.short{border-left-color:#f6465d}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.box{background:#181e25;padding:8px;border-radius:6px;font-size:12px}.box b{display:block;font-size:14px}
-</style></head><body>
-<div class="header"><h2>⚡ Bybit Institutional OrderFlow v7 Lite</h2>
-<button onclick="start()">▶ Старт</button> <button class=stop onclick="stop()">⏹ Стоп</button> <button class=clear onclick="clearCards()">🗑 Очистить</button>
-<div id=status>Статус: ожидание</div></div>
-<div id=signals><div>Нажмите «Старт».</div></div>
+.short{border-left-color:#f6465d}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.box{background:#181e25;padding:8px;border-radius:6px;font-size:12px}.box b{display:block;font-size:14px}
+#status{margin-top:8px;font-size:13px;color:#848e9c}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>⚡ Bybit Institutional OrderFlow v7 Lite</h2>
+  <button onclick="start()">▶ Старт</button> 
+  <button class="stop" onclick="stop()">⏹ Стоп</button> 
+  <button class="clear" onclick="clearCards()">🗑 Очистить</button>
+  <div id="status">Статус: ожидание</div>
+</div>
+
+<div id="signals"><div>Нажмите «Старт» для запуска сканера...</div></div>
+
 <script>
-const DEPTH=50,TOP=100;let run=false,ws=[],books=new Map(),swings=new Map(),trades=new Map(),signals=new Map(),symbols=[],metrics=new Map();
-const S=document.getElementById("signals"),ST=document.getElementById("status");
-const now=()=>Date.now();
-const pf=v=>Number(v)>=1000?Number(v).toFixed(2):Number(v).toFixed(4);
-async function start(){if(run)return;run=true;ST.textContent="Загрузка...";
- const r=await fetch("https://api.bybit.com/v5/market/tickers?category=linear");const j=await r.json();
- const ex=new Set(["BTCUSDT","ETHUSDT","SOLUSDT","XRPUSDT","DOGEUSDT"]);
- symbols=j.result.list.filter(x=>x.symbol.endsWith("USDT")&&!ex.has(x.symbol)).sort((a,b)=>+b.turnover24h-+a.turnover24h).slice(0,TOP).map((x,i)=>(metrics.set(x.symbol,{rank:i+1,turn:+x.turnover24h}),x.symbol));
- for(const s of symbols){await loadSwings(s);await new Promise(r=>setTimeout(r,40))}
- connect();ST.textContent="Мониторинг запущен";}
-async function loadSwings(sym){try{const r=await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=5&limit=40`);const j=await r.json();const k=j.result.list.map(x=>({h:+x[2],l:+x[3],c:+x[4]})).reverse();let hi=[],lo=[];for(let i=2;i<k.length-2;i++){if(k[i].h>k[i-1].h&&k[i].h>k[i+1].h&&k[i].h>k[i-2].h&&k[i].h>k[i+2].h)hi.push(k[i].h);if(k[i].l<k[i-1].l&&k[i].l<k[i+1].l&&k[i].l<k[i-2].l&&k[i].l<k[i+2].l)lo.push(k[i].l)}swings.set(sym,{hi,lo,k});}catch(e){}}
-function connect(){for(let i=0;i<symbols.length;i+=25){const g=symbols.slice(i,i+25);const w=new WebSocket("wss://stream.bybit.com/v5/public/linear");ws.push(w);w.onopen=async()=>{let a=[];g.forEach(s=>{a.push(`orderbook.${DEPTH}.${s}`);a.push(`publicTrade.${s}`)});for(let j=0;j<a.length;j+=20){w.send(JSON.stringify({op:"subscribe",args:a.slice(j,j+20)}));await new Promise(r=>setTimeout(r,80))}};w.onmessage=e=>{const d=JSON.parse(e.data);if(!d.topic)return;const p=d.topic.split(".");const t=p[0],s=p.at(-1);if(t==="orderbook")ob(s,d);else if(t==="publicTrade")tr(s,d.data)}}setInterval(()=>ws.forEach(w=>w.readyState===1&&w.send(JSON.stringify({op:"ping"}))),20000)}
-function ob(s,d){let b=books.get(s);if(d.type==="snapshot"){b={b:new Map(),a:new Map(),last:0};d.data.b.forEach(o=>b.b.set(+o[0],+o[1]));d.data.a.forEach(o=>b.a.set(+o[0],+o[1]));books.set(s,b)}else if(b){d.data.b.forEach(o=>+o[1]?b.b.set(+o[0],+o[1]):b.b.delete(+o[0]));d.data.a.forEach(o=>+o[1]?b.a.set(+o[0],+o[1]):b.a.delete(+o[0]))}scan(s)}
-function tr(s,l){let b=books.get(s);if(!b)return;b.last=+l[0].p;if(!trades.has(s))trades.set(s,[]);const arr=trades.get(s);l.forEach(x=>arr.push({p:+x.p,val:+x.p*+x.v,side:x.S,t:x.T||now()}));while(arr.length&&arr[0].t<now()-15000)arr.shift();scan(s)}
-function atr(k){let t=0;for(let i=1;i<k.length;i++)t+=Math.max(k[i].h-k[i].l,Math.abs(k[i].h-k[i-1].c),Math.abs(k[i].l-k[i-1].c));return t/(k.length-1)}
-function cluster(map,p,s){let total=0,peak=p,m=0;for(const[k,q]of map){if(Math.abs(k-p)/p<=0.005){let u=k*q;total+=u;if(u>m){m=u;peak=k}}}let min=Math.max(10000,(metrics.get(s)?.turn||5e6)/1440*1.2);if(total<min)return null;return{usd:total,price:peak,min:peak*.998,max:peak*1.002}}
-function scan(s){const b=books.get(s),sw=swings.get(s);if(!b||!sw||!b.last)return;const lv=[...sw.lo.map(x=>({p:x,side:"LONG"})),...sw.hi.map(x=>({p:x,side:"SHORT"}))];for(const l of lv){const key=`${s}_${l.side}_${l.p}`;if(signals.has(key))continue;const c=cluster(l.side==="LONG"?b.b:b.a,l.p,s);if(!c)continue;if(Math.abs(b.last-c.price)/c.price>.0025)continue;let hits=0,abs=0;for(const t of(trades.get(s)||[])){const hit=l.side==="LONG"?t.side==="Sell":t.side==="Buy";if(hit&&Math.abs(t.p-c.price)/c.price<.003){hits++;abs+=t.val}}if(hits<2&&abs<5000)continue;const A=atr(sw.k),sl=l.side==="LONG"?c.min-A*.2:c.max+A*.2,r=Math.abs(b.last-sl);signals.set(key,{symbol:s,side:l.side,price:b.last,sl,tp:b.last+(l.side==="LONG"?2*r:-2*r),cluster:c.usd});render()}}}
-function render(){if(!signals.size){S.innerHTML="<div>Ожидаем сетапы...</div>";return}S.innerHTML=[...signals.values()].slice(0,15).map(x=>`<div class="card ${x.side==="SHORT"?"short":""}"><h3>${x.symbol} ${x.side}</h3><div class=grid><div class=box>Вход<b>${pf(x.price)}</b></div><div class="box">SL<b>${pf(x.sl)}</b></div><div class="box">TP<b>${pf(x.tp)}</b></div><div class=box>Кластер<b>$${Math.round(x.cluster).toLocaleString()}</b></div></div></div>`).join("")}
-function stop(){run=false;ws.forEach(x=>x.close());ws=[];ST.textContent="Остановлен"}
-function clearCards(){signals.clear();render()}
-</script></body></html>
+const DEPTH = 50, TOP = 100;
+let run = false, ws = [], pingInterval = null;
+let books = new Map(), swings = new Map(), trades = new Map(), signals = new Map(), symbols = [], metrics = new Map();
+
+const S = document.getElementById("signals");
+const ST = document.getElementById("status");
+
+const now = () => Date.now();
+const pf = v => Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4);
+
+async function start() {
+    if (run) return;
+    run = true;
+    ST.textContent = "Загрузка списка монет и уровней...";
+
+    try {
+        const r = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
+        const j = await r.json();
+        const ex = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]);
+
+        symbols = j.result.list
+            .filter(x => x.symbol.endsWith("USDT") && !ex.has(x.symbol))
+            .sort((a, b) => +b.turnover24h - +a.turnover24h)
+            .slice(0, TOP)
+            .map((x, i) => (metrics.set(x.symbol, { rank: i + 1, turn: +x.turnover24h }), x.symbol));
+
+        for (const s of symbols) {
+            await loadSwings(s);
+            await new Promise(r => setTimeout(r, 30));
+        }
+
+        connect();
+        ST.textContent = `Мониторинг запущен (${symbols.length} монет)`;
+    } catch (e) {
+        ST.textContent = "Ошибка загрузки данных с Bybit API";
+        run = false;
+    }
+}
+
+async function loadSwings(sym) {
+    try {
+        const r = await fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${sym}&interval=5&limit=40`);
+        const j = await r.json();
+        if (!j.result?.list) return;
+
+        const k = j.result.list.map(x => ({ h: +x[2], l: +x[3], c: +x[4] })).reverse();
+        let hi = [], lo = [];
+
+        for (let i = 2; i < k.length - 2; i++) {
+            if (k[i].h > k[i-1].h && k[i].h > k[i+1].h && k[i].h > k[i-2].h && k[i].h > k[i+2].h) hi.push(k[i].h);
+            if (k[i].l < k[i-1].l && k[i].l < k[i+1].l && k[i].l < k[i-2].l && k[i].l < k[i+2].l) lo.push(k[i].l);
+        }
+        swings.set(sym, { hi, lo, k });
+    } catch (e) {}
+}
+
+function connect() {
+    for (let i = 0; i < symbols.length; i += 20) {
+        const g = symbols.slice(i, i + 20);
+        const w = new WebSocket("wss://stream.bybit.com/v5/public/linear");
+        ws.push(w);
+
+        w.onopen = async () => {
+            let a = [];
+            g.forEach(s => {
+                a.push(`orderbook.${DEPTH}.${s}`);
+                a.push(`publicTrade.${s}`);
+            });
+
+            for (let j = 0; j < a.length; j += 10) {
+                if (w.readyState === WebSocket.OPEN) {
+                    w.send(JSON.stringify({ op: "subscribe", args: a.slice(j, j + 10) }));
+                    await new Promise(r => setTimeout(r, 100));
+                }
+            }
+        };
+
+        w.onmessage = e => {
+            if (!run) return;
+            try {
+                const d = JSON.parse(e.data);
+                if (!d.topic) return;
+                const p = d.topic.split(".");
+                const t = p[0], s = p.at(-1);
+
+                if (t === "orderbook") ob(s, d);
+                else if (t === "publicTrade") tr(s, d.data);
+            } catch (err) {}
+        };
+    }
+
+    if (pingInterval) clearInterval(pingInterval);
+    pingInterval = setInterval(() => {
+        ws.forEach(w => w.readyState === WebSocket.OPEN && w.send(JSON.stringify({ op: "ping" })));
+    }, 20000);
+}
+
+function ob(s, d) {
+    let b = books.get(s) || { b: new Map(), a: new Map(), last: 0 };
+
+    if (d.type === "snapshot") {
+        b.b.clear();
+        b.a.clear();
+        d.data.b.forEach(o => b.b.set(+o[0], +o[1]));
+        d.data.a.forEach(o => b.a.set(+o[0], +o[1]));
+    } else if (d.type === "delta") {
+        d.data.b.forEach(o => +o[1] ? b.b.set(+o[0], +o[1]) : b.b.delete(+o[0]));
+        d.data.a.forEach(o => +o[1] ? b.a.set(+o[0], +o[1]) : b.a.delete(+o[0]));
+    }
+
+    books.set(s, b);
+    scan(s);
+}
+
+function tr(s, l) {
+    if (!l || !l.length) return;
+
+    // ГАРАНТИЯ: Создаем структуру книги, если сделки пришли раньше orderbook snapshot
+    let b = books.get(s) || { b: new Map(), a: new Map(), last: 0 };
+    b.last = +l[0].p; 
+    books.set(s, b);
+
+    if (!trades.has(s)) trades.set(s, []);
+    const arr = trades.get(s);
+
+    l.forEach(x => arr.push({
+        p: +x.p,
+        val: +x.p * +x.v,
+        side: x.S,
+        t: x.T || now()
+    }));
+
+    while (arr.length && arr[0].t < now() - 15000) arr.shift();
+    scan(s);
+}
+
+function atr(k) {
+    if (!k || k.length < 2) return 0;
+    let t = 0;
+    for (let i = 1; i < k.length; i++) {
+        t += Math.max(k[i].h - k[i].l, Math.abs(k[i].h - k[i-1].c), Math.abs(k[i].l - k[i-1].c));
+    }
+    return t / (k.length - 1);
+}
+
+function cluster(map, p, s) {
+    if (!map || map.size === 0) return null;
+
+    let total = 0, peak = p, m = 0;
+    for (const [k, q] of map) {
+        if (Math.abs(k - p) / p <= 0.005) {
+            let u = k * q;
+            total += u;
+            if (u > m) { m = u; peak = k; }
+        }
+    }
+
+    let minThreshold = Math.max(10000, (metrics.get(s)?.turn || 5e6) / 1440 * 1.2);
+    if (total < minThreshold) return null;
+
+    return { usd: total, price: peak, min: peak * 0.998, max: peak * 1.002 };
+}
+
+function scan(s) {
+    const b = books.get(s), sw = swings.get(s);
+    if (!b || !sw || !b.last) return;
+
+    const lv = [
+        ...sw.lo.map(x => ({ p: x, side: "LONG" })),
+        ...sw.hi.map(x => ({ p: x, side: "SHORT" }))
+    ];
+
+    for (const l of lv) {
+        const key = `${s}_${l.side}_${l.p}`;
+        if (signals.has(key)) continue;
+
+        const c = cluster(l.side === "LONG" ? b.b : b.a, l.p, s);
+        if (!c) continue;
+
+        if (Math.abs(b.last - c.price) / c.price > 0.0025) continue;
+
+        let hits = 0, abs = 0;
+        for (const t of (trades.get(s) || [])) {
+            const hit = l.side === "LONG" ? t.side === "Sell" : t.side === "Buy";
+            if (hit && Math.abs(t.p - c.price) / c.price < 0.003) {
+                hits++;
+                abs += t.val;
+            }
+        }
+
+        if (hits < 2 && abs < 5000) continue;
+
+        const A = atr(sw.k);
+        const sl = l.side === "LONG" ? c.min - A * 0.2 : c.max + A * 0.2;
+        const r = Math.abs(b.last - sl);
+
+        signals.set(key, {
+            symbol: s,
+            side: l.side,
+            price: b.last,
+            sl,
+            tp: b.last + (l.side === "LONG" ? 2 * r : -2 * r),
+            cluster: c.usd
+        });
+
+        render();
+    }
+}
+
+function render() {
+    if (!signals.size) {
+        S.innerHTML = "<div>Ожидаем подтвержденные сетапы...</div>";
+        return;
+    }
+
+    S.innerHTML = [...signals.values()].slice(0, 15).map(x => `
+        <div class="card ${x.side === "SHORT" ? "short" : ""}">
+            <h3>${x.symbol} — ${x.side}</h3>
+            <div class="grid">
+                <div class="box">Вход<b>${pf(x.price)}</b></div>
+                <div class="box">SL<b>${pf(x.sl)}</b></div>
+                <div class="box">TP<b>${pf(x.tp)}</b></div>
+                <div class="box">Кластер<b>$${Math.round(x.cluster).toLocaleString()}</b></div>
+            </div>
+        </div>
+    `).join("");
+}
+
+function stop() {
+    run = false;
+    if (pingInterval) clearInterval(pingInterval);
+    ws.forEach(x => { try { x.close(); } catch(e){} });
+    ws = [];
+    ST.textContent = "Мониторинг остановлен.";
+}
+
+function clearCards() {
+    signals.clear();
+    render();
+}
+</script>
+</body>
+</html>
