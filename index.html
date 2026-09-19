@@ -29,7 +29,7 @@ button{background:#f0b90b;border:0;padding:8px 14px;border-radius:6px;font-weigh
 
 <div class="header">
   <div>
-    <h3 style="margin:0 0 4px 0">⚡ OrderFlow v10 PRO (Institutional Grade)</h3>
+    <h3 style="margin:0 0 4px 0">⚡ OrderFlow v10 PRO (Auto-Reconnect)</h3>
     <div id="status">Статус: Готов к работе</div>
   </div>
   <div>
@@ -39,14 +39,15 @@ button{background:#f0b90b;border:0;padding:8px 14px;border-radius:6px;font-weigh
   </div>
 </div>
 
-<div id="signals"><div>Нажмите «Старт» для запуска профессионального анализа OrderFlow...</div></div>
+<div id="signals"><div>Нажмите «Старт» для запуска сканера...</div></div>
 
 <script>
 const DEPTH = 50, TOP = 80, SIGNAL_TTL_MS = 900000;
-let run = false, ws = [], pingInterval = null, managerInterval = null, swingsInterval = null, debounceInterval = null;
+let run = false, ws = [], pingInterval = null, managerInterval = null, swingsInterval = null, debounceInterval = null, watchdogInterval = null;
 
 let books = new Map(), zones = new Map(), trades = new Map(), signals = new Map(), cooldowns = new Map(), symbols = [], metrics = new Map();
 let wallTracker = new Map(), pendingSymbols = new Set();
+let lastDataRxTime = Date.now();
 
 const S = document.getElementById("signals");
 const ST = document.getElementById("status");
@@ -54,10 +55,17 @@ const ST = document.getElementById("status");
 const now = () => Date.now();
 const pf = v => Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4);
 
+// Обработчик разворачивания вкладки на телефоне
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && run) {
+        checkAndRepairConnection();
+    }
+});
+
 async function start() {
     if (run) return;
     run = true;
-    ST.textContent = "Инициализация списка монет и зон HTF (4H, 1H, 15M)...";
+    ST.textContent = "Инициализация монет и зон HTF (4H, 1H, 15M)...";
 
     try {
         const r = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
@@ -81,6 +89,7 @@ async function start() {
         connect();
         startSignalManager();
         startDebounceEngine();
+        startWatchdog();
         
         swingsInterval = setInterval(async () => {
             if (!run) return;
@@ -159,6 +168,9 @@ function buildZones(raw) {
 }
 
 function connect() {
+    closeWebSockets();
+    ws = [];
+
     for (let i = 0; i < symbols.length; i += 20) {
         const g = symbols.slice(i, i + 20);
         const w = new WebSocket("wss://stream.bybit.com/v5/public/linear");
@@ -181,6 +193,7 @@ function connect() {
 
         w.onmessage = e => {
             if (!run) return;
+            lastDataRxTime = now(); // Обновляем таймер входящих данных
             try {
                 const d = JSON.parse(e.data);
                 if (!d.topic) return;
@@ -191,12 +204,50 @@ function connect() {
                 else if (t === "publicTrade") tr(s, d.data);
             } catch (err) {}
         };
+
+        w.onclose = w.onerror = () => {
+            if (run) setTimeout(checkAndRepairConnection, 2000);
+        };
     }
 
     if (pingInterval) clearInterval(pingInterval);
     pingInterval = setInterval(() => {
         ws.forEach(w => w.readyState === WebSocket.OPEN && w.send(JSON.stringify({ op: "ping" })));
     }, 20000);
+}
+
+function closeWebSockets() {
+    ws.forEach(w => {
+        try {
+            w.onclose = null;
+            w.onerror = null;
+            w.close();
+        } catch(e){}
+    });
+    ws = [];
+}
+
+// Проверка и автоматическое восстановление соединения при заморозке
+function checkAndRepairConnection() {
+    if (!run) return;
+    const isAnyWsClosed = ws.length === 0 || ws.some(w => w.readyState !== WebSocket.OPEN);
+    const isDataStale = (now() - lastDataRxTime) > 10000; // Нет данных больше 10 сек
+
+    if (isAnyWsClosed || isDataStale) {
+        ST.textContent = "Восстановление соединения после паузы...";
+        books.clear(); // Сбрасываем старый стакан
+        connect();
+        setTimeout(() => {
+            if (run) ST.textContent = `Мониторинг запущен (${symbols.length} монет)`;
+        }, 2000);
+    }
+}
+
+function startWatchdog() {
+    if (watchdogInterval) clearInterval(watchdogInterval);
+    watchdogInterval = setInterval(() => {
+        if (run) checkAndRepairConnection();
+    }, 5000);
 }
 
 function ob(s, d) {
@@ -333,7 +384,6 @@ function scan(s) {
     const b = books.get(s), zd = zones.get(s);
     if (!b || !b.valid || !zd || !b.last) return;
 
-    // 1. Фильтр HTF Зон с зауженными допусками (4H = 0.4%, 1H = 0.25%, 15M = 0.15%)
     const activeZones = zd.zones.filter(z => {
         const tol = z.tf === "4H" ? 0.004 : (z.tf === "1H" ? 0.0025 : 0.0015);
         return b.last >= z.min * (1 - tol) && b.last <= z.max * (1 + tol);
@@ -341,20 +391,18 @@ function scan(s) {
 
     if (!activeZones.length) return;
 
-    // 2. ЗАЩИТА ОТ ВИЛОК: Проверка ширины канала (зажима между стенками)
     const longZone = zd.zones.find(z => z.side === "LONG" && Math.abs(b.last - z.max) / b.last <= 0.01);
     const shortZone = zd.zones.find(z => z.side === "SHORT" && Math.abs(b.last - z.min) / b.last <= 0.01);
 
     if (longZone && shortZone) {
         const channelWidth = (shortZone.min - longZone.max) / b.last;
-        if (channelWidth < 0.008) return; // Игнорируем зажатые монеты
+        if (channelWidth < 0.008) return;
     }
 
     for (const z of activeZones) {
         const cdKey = `${s}_${z.side}`;
         if (cooldowns.has(cdKey) && now() < cooldowns.get(cdKey)) continue;
 
-        // Блокировка противоположного активного сигнала по одной монете
         const oppositeSide = z.side === "LONG" ? "SHORT" : "LONG";
         const hasOppositeSignal = [...signals.values()].some(sig => sig.symbol === s && sig.side === oppositeSide);
         if (hasOppositeSignal) continue;
@@ -368,16 +416,13 @@ function scan(s) {
 
         const atrVal = atr(zd.k5m);
         
-        // Подтверждение отскока (0.15 ATR)
         const hasBounced = z.side === "LONG" ? (b.last >= c.peakPrice + atrVal * 0.15) : (b.last <= c.peakPrice - atrVal * 0.15);
         if (!hasBounced) continue;
 
-        // Фильтр по CVD
         const cvd = getCvd(s);
         const cvdOk = z.side === "LONG" ? cvd.delta >= -5000 : cvd.delta <= 5000;
         if (!cvdOk) continue;
 
-        // Расчет Score (0–100)
         let score = 0;
         let reasons = [];
 
@@ -511,8 +556,8 @@ function stop() {
     if (managerInterval) clearInterval(managerInterval);
     if (swingsInterval) clearInterval(swingsInterval);
     if (debounceInterval) clearInterval(debounceInterval);
-    ws.forEach(x => { try { x.close(); } catch(e){} });
-    ws = [];
+    if (watchdogInterval) clearInterval(watchdogInterval);
+    closeWebSockets();
     ST.textContent = "Сканер остановлен.";
 }
 
