@@ -3,59 +3,50 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bybit Institutional OrderFlow Engine v7.0 (Single File)</title>
+<title>Bybit Signals</title>
 <style>
 * { box-sizing: border-box; }
-body { margin: 0; padding: 15px; background: #080a0c; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
-.header { background: #12161c; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #1e2630; }
-h1 { font-size: 18px; margin: 0 0 12px 0; color: #f0b90b; display: flex; align-items: center; gap: 8px; }
-.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
-button { border: none; border-radius: 6px; padding: 10px 16px; font-weight: bold; cursor: pointer; background: #f0b90b; color: #000; font-size: 12px; }
+body { margin: 0; padding: 15px; background: #080a0c; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.header { background: #12161c; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #1e2630; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+h1 { font-size: 18px; margin: 0; color: #f0b90b; }
+.controls { display: flex; gap: 8px; }
+button { border: none; border-radius: 6px; padding: 8px 14px; font-weight: bold; cursor: pointer; background: #f0b90b; color: #000; font-size: 12px; }
 button.stop { background: #f6465d; color: white; }
 button.clear { background: #2b313a; color: white; }
-.status-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
-.stat-card { background: #181e25; border-radius: 6px; padding: 8px; text-align: center; border: 1px solid #222c37; font-size: 11px; color: #848e9c; }
-.stat-card span { display: block; font-size: 13px; font-weight: bold; margin-top: 2px; color: #eaecef; }
-.signals { height: 72vh; overflow-y: auto; }
+.signals { height: 80vh; overflow-y: auto; }
 .card { background: #12161c; border-radius: 8px; padding: 14px; margin-bottom: 10px; border-left: 5px solid #0ecb81; border: 1px solid #1e2630; }
-.card.hold { border-left-color: #3b82f6; }
-.card.broken { border-left-color: #f6465d; opacity: 0.6; }
-.head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.symbol { font-size: 16px; font-weight: bold; }
-.badge { font-weight: bold; font-size: 11px; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; background: rgba(14, 203, 129, 0.2); color: #0ecb81; }
+.card.short { border-left-color: #f6465d; }
+.card.hold { opacity: 0.8; }
+.card.broken { border-left-color: #5e6673; opacity: 0.4; }
+.head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.symbol { font-size: 18px; font-weight: bold; }
+.badge { font-weight: bold; font-size: 12px; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; background: rgba(14, 203, 129, 0.2); color: #0ecb81; }
 .badge.short { background: rgba(246, 70, 93, 0.2); color: #f6465d; }
-.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; font-size: 11px; }
-.box { background: #181e25; padding: 6px 8px; border-radius: 4px; color: #848e9c; }
-.box strong { display: block; color: #eaecef; font-size: 12px; margin-top: 2px; }
-.reason { color: #848e9c; font-size: 11px; margin-top: 8px; line-height: 1.4; background: #181e25; padding: 8px; border-radius: 4px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.box { background: #181e25; padding: 10px; border-radius: 6px; color: #848e9c; font-size: 11px; text-align: center; }
+.box strong { display: block; color: #eaecef; font-size: 14px; margin-top: 4px; }
+.box.entry strong { color: #f0b90b; }
+.box.sl strong { color: #f6465d; }
+.box.tp strong { color: #0ecb81; }
 .empty { text-align: center; color: #848e9c; padding: 50px; font-size: 13px; }
 </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>⚡ OrderFlow Engine v7.0 (GitHub Standalone)</h1>
+    <h1>⚡ Bybit OrderFlow Signals</h1>
     <div class="controls">
-        <button onclick="startEngine()">▶ Запустить Сканер</button>
+        <button onclick="startEngine()">▶ Старт</button>
         <button class="stop" onclick="stopEngine()">⏹ Стоп</button>
         <button class="clear" onclick="clearSignals()">🗑 Очистить</button>
-    </div>
-    <div class="status-bar">
-        <div class="stat-card">Монеты<span id="coinCount">0</span></div>
-        <div class="stat-card">WS Потоки<span id="wsStatus" style="color:#f6465d">0/4</span></div>
-        <div class="stat-card">Сигналы (ENTRY)<span id="sigCount">0</span></div>
-        <div class="stat-card">Всего Кластеров<span id="clusterCount">0</span></div>
     </div>
 </div>
 
 <div id="signals" class="signals">
-    <div class="empty" id="emptyState">Нажмите "Запустить Сканер" для старта инициализации...</div>
+    <div class="empty" id="emptyState">Нажмите "Старт" для запуска сканера...</div>
 </div>
 
 <script>
-// ============================================================================
-// CONFIG & STATE
-// ============================================================================
 const ORDERBOOK_DEPTH = 50;
 const LEVEL_COOLDOWN = 90000;
 
@@ -72,12 +63,8 @@ const trades = new Map();
 const signals = new Map();
 
 function now() { return Date.now(); }
-function money(v) { return Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
 function price(v) { return Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4); }
 
-// ============================================================================
-// ENGINE LOGIC
-// ============================================================================
 function startGarbageCollector() {
     setInterval(() => {
         if (!running) return;
@@ -105,24 +92,18 @@ function initMultiWS() {
     closeWS();
     books.clear(); states.clear(); trades.clear();
     const chunkSize = 25;
-    let activeWSCount = 0;
 
     for (let i = 0; i < symbols.length; i += chunkSize) {
         const group = symbols.slice(i, i + chunkSize);
-        createSingleWS(group, () => {
-            activeWSCount++;
-            document.getElementById("wsStatus").innerText = `${activeWSCount}/4`;
-            document.getElementById("wsStatus").style.color = "#0ecb81";
-        });
+        createSingleWS(group);
     }
 }
 
-function createSingleWS(group, onOpenCb) {
+function createSingleWS(group) {
     const ws = new WebSocket("wss://stream.bybit.com/v5/public/linear");
     wsConnections.push(ws);
 
     ws.onopen = async () => {
-        if (onOpenCb) onOpenCb();
         const args = [];
         group.forEach(s => {
             args.push(`orderbook.${ORDERBOOK_DEPTH}.${s}`);
@@ -148,7 +129,7 @@ function createSingleWS(group, onOpenCb) {
         } catch(err){}
     };
 
-    ws.onclose = () => { if (running) setTimeout(() => createSingleWS(group, null), 3000); };
+    ws.onclose = () => { if (running) setTimeout(() => createSingleWS(group), 3000); };
 }
 
 function handleOrderbook(symbol, data) {
@@ -193,20 +174,19 @@ function handleTrades(symbol, tradeList) {
 
 function getCluster(sourceMap, targetPrice, symbol) {
     if (!sourceMap || sourceMap.size === 0) return null;
-    let totalUsd = 0, peakPrice = targetPrice, maxUsd = 0, ticks = 0;
+    let totalUsd = 0, peakPrice = targetPrice, maxUsd = 0;
     const minClusterSize = Math.max(10000, (symbolMetrics.get(symbol)?.turnover || 5000000) / 1440 * 1.2);
 
     for (const [p, q] of sourceMap.entries()) {
         if (Math.abs(p - targetPrice) / targetPrice <= 0.005) {
             const usd = p * q;
             totalUsd += usd;
-            ticks++;
             if (usd > maxUsd) { maxUsd = usd; peakPrice = p; }
         }
     }
 
     if (totalUsd < minClusterSize) return null;
-    return { usd: totalUsd, price: peakPrice, min: peakPrice * 0.998, max: peakPrice * 1.002, ticks };
+    return { usd: totalUsd, price: peakPrice, min: peakPrice * 0.998, max: peakPrice * 1.002 };
 }
 
 function calcAbsorptionRatio(symbol, side, cluster) {
@@ -321,17 +301,12 @@ function processEngine(symbol) {
 
             signals.set(key, {
                 key, symbol, side: l.side,
-                state: "ENTRY",
+                state: "Вход",
                 price: book.lastPrice,
-                cluster: c.usd,
-                clusterPrice: c.price,
-                ticks: c.ticks,
-                hits: st.hits,
-                abs: st.abs,
                 sl: stop,
                 tp: book.lastPrice + (l.side === "LONG" ? risk * 2 : -risk * 2),
-                bounce,
-                atr: ATR
+                atr: ATR,
+                clusterPrice: c.price
             });
             render();
         }
@@ -353,29 +328,26 @@ function startManager() {
             if (st.side === "LONG") {
                 if (price > st.entryPrice + atr * 0.4 && st.state !== "HOLD") {
                     st.state = "HOLD";
-                    if(signals.has(key)) { signals.get(key).state = "HOLD"; signals.get(key).reason = "Уровень удержался"; render(); }
+                    if(signals.has(key)) { signals.get(key).state = "В процессе"; render(); }
                 }
                 if (price < st.cluster.price - atr * 0.25 && st.state !== "BROKEN") {
                     st.state = "BROKEN";
-                    if(signals.has(key)) { signals.get(key).state = "BROKEN"; signals.get(key).reason = "Уровень сломан"; render(); }
+                    if(signals.has(key)) { signals.get(key).state = "Сломан"; render(); }
                 }
             } else {
                 if (price < st.entryPrice - atr * 0.4 && st.state !== "HOLD") {
                     st.state = "HOLD";
-                    if(signals.has(key)) { signals.get(key).state = "HOLD"; signals.get(key).reason = "Сопротивление удержалось"; render(); }
+                    if(signals.has(key)) { signals.get(key).state = "В процессе"; render(); }
                 }
                 if (price > st.cluster.price + atr * 0.25 && st.state !== "BROKEN") {
                     st.state = "BROKEN";
-                    if(signals.has(key)) { signals.get(key).state = "BROKEN"; signals.get(key).reason = "Сопротивление пробито"; render(); }
+                    if(signals.has(key)) { signals.get(key).state = "Сломан"; render(); }
                 }
             }
         });
     }, 700);
 }
 
-// ============================================================================
-// DATA FETCHING & INTERFACE
-// ============================================================================
 async function loadSwings(symbol) {
     try {
         const [r5, r60] = await Promise.all([
@@ -420,8 +392,6 @@ async function startEngine() {
             symbolMetrics.set(item.symbol, { rank: idx + 1, turnover: +item.turnover24h });
         });
 
-        document.getElementById("coinCount").innerText = symbols.length;
-
         for (let i = 0; i < symbols.length; i++) {
             await loadSwings(symbols[i]);
             await new Promise(r => setTimeout(r, 50));
@@ -431,17 +401,16 @@ async function startEngine() {
         startGarbageCollector();
         startManager();
 
-        document.getElementById("emptyState").innerText = "Мониторинг запущен. Ожидание сигналов...";
+        document.getElementById("emptyState").innerText = "Сканер запущен. Ожидание сетапов...";
     } catch(err) {
-        document.getElementById("emptyState").innerText = "Ошибка загрузки данных Bybit. Проверьте сеть.";
+        document.getElementById("emptyState").innerText = "Ошибка загрузки данных. Проверьте сеть.";
     }
 }
 
 function stopEngine() {
     running = false;
     closeWS();
-    document.getElementById("wsStatus").innerText = "0/4";
-    document.getElementById("wsStatus").style.color = "#f6465d";
+    document.getElementById("emptyState").innerText = "Сканер остановлен.";
 }
 
 function clearSignals() {
@@ -453,35 +422,22 @@ function render() {
     const box = document.getElementById("signals");
 
     if (signals.size === 0) {
-        box.innerHTML = '<div class="empty" id="emptyState">Ожидаем подтвержденный отскок от институционального уровня...</div>';
-        document.getElementById("sigCount").innerText = 0;
-        document.getElementById("clusterCount").innerText = 0;
+        box.innerHTML = '<div class="empty" id="emptyState">Ожидаем точки входа...</div>';
         return;
     }
 
-    const arr = [...signals.values()].sort((a,b) => b.cluster - a.cluster).slice(0, 15);
-    document.getElementById("sigCount").innerText = arr.filter(s => s.state === 'ENTRY' || s.state === 'HOLD').length;
-    document.getElementById("clusterCount").innerText = signals.size;
+    const arr = [...signals.values()].slice(0, 15);
 
     box.innerHTML = arr.map(s => `
-        <div class="card ${s.state ? s.state.toLowerCase() : ''}">
+        <div class="card ${s.side === 'SHORT' ? 'short' : ''} ${s.state === 'В процессе' ? 'hold' : ''} ${s.state === 'Сломан' ? 'broken' : ''}">
             <div class="head">
                 <div class="symbol">${s.symbol}</div>
                 <div class="badge ${s.side === 'SHORT' ? 'short' : ''}">${s.side} [${s.state}]</div>
             </div>
             <div class="grid">
-                <div class="box">Кластер<strong>$${money(s.cluster)}</strong></div>
-                <div class="box">Цена Входа<strong>${price(s.price)}</strong></div>
-                <div class="box">SL<strong>${price(s.sl)}</strong></div>
-                <div class="box">TP<strong>${price(s.tp)}</strong></div>
-                <div class="box">Удары в Ядро<strong>${s.hits}</strong></div>
-                <div class="box">Absorption<strong>$${money(s.abs)}</strong></div>
-                <div class="box">Цена Ядра<strong>${price(s.clusterPrice)}</strong></div>
-                <div class="box">Тиков<strong>${s.ticks}</strong></div>
-            </div>
-            <div class="reason">
-                <b>Статус: ${s.state}</b><br>
-                ${s.reason || "Цена коснулась ядра кластера, прошла проверка на спуфинг, зафиксировано поглощение маркет-ордерами."}
+                <div class="box entry">Входить по<strong>${price(s.price)}</strong></div>
+                <div class="box sl">Stop Loss<strong>${price(s.sl)}</strong></div>
+                <div class="box tp">Take Profit<strong>${price(s.tp)}</strong></div>
             </div>
         </div>
     `).join("");
