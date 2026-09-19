@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bybit Institutional OrderFlow Engine v5 (Production Grade)</title>
+<title>Bybit Institutional OrderFlow Engine v6 (Production Ready)</title>
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; padding: 15px; background: #080a0c; color: #eaecef; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; }
@@ -38,7 +38,7 @@ button.clear { background: #2b313a; color: white; }
 <body>
 
 <div class="header">
-    <h1>⚡ Bybit Institutional OrderFlow Engine v5 (Production Grade)</h1>
+    <h1>⚡ Bybit Institutional OrderFlow Engine v6 (Production Ready)</h1>
     <div class="controls">
         <button onclick="startEngine()">▶ Запустить Сканер</button>
         <button class="stop" onclick="stopEngine()">⏹ Стоп</button>
@@ -111,7 +111,7 @@ function startGarbageCollector() {
         }
 
         for (const [symbol, buffer] of recentTrades.entries()) {
-            const cutoff = currentTime - 5000;
+            const cutoff = currentTime - 10000;
             while (buffer.length > 0 && buffer[0].t < cutoff) buffer.shift();
             if (buffer.length === 0) recentTrades.delete(symbol);
         }
@@ -120,13 +120,13 @@ function startGarbageCollector() {
 
 function getMinClusterSize(symbol) {
     const m = symbolMetrics.get(symbol) || { rank: 100, turnover: 10000000 };
-    let rankFloor = 150000;
-    if (m.rank <= 3) rankFloor = 3000000;
-    else if (m.rank <= 15) rankFloor = 1200000;
-    else if (m.rank <= 40) rankFloor = 500000;
-    else if (m.rank <= 80) rankFloor = 250000;
+    let rankFloor = 50000;
+    if (m.rank <= 3) rankFloor = 800000;
+    else if (m.rank <= 15) rankFloor = 400000;
+    else if (m.rank <= 40) rankFloor = 200000;
+    else if (m.rank <= 80) rankFloor = 100000;
 
-    return Math.max(rankFloor, m.turnover * 0.00008);
+    return Math.max(rankFloor, m.turnover * 0.00004);
 }
 
 function closeWS() {
@@ -164,7 +164,6 @@ function createSingleWS(group, onOpenCb) {
             args.push(\`publicTrade.\${s}\`);
         });
 
-        // Отправка с микро-паузами для избежания Rate Limit WebSocket
         for (let i = 0; i < args.length; i += 20) {
             ws.send(JSON.stringify({ op: "subscribe", args: args.slice(i, i + 20) }));
             await new Promise(r => setTimeout(r, 100));
@@ -204,12 +203,10 @@ function handleOrderbook(symbol, data) {
         data.data.a.forEach(o => book.asks.set(parseFloat(o[0]), parseFloat(o[1])));
         books.set(symbol, book);
     } else if (data.type === 'delta') {
-        if (!book) return; // Нет snapshot — пропускаем дельту
+        if (!book) return;
 
-        // Проверка последовательности sequence numbers
         const currentSeq = data.cts || data.u;
         if (book.seq && currentSeq < book.seq) {
-            // Рассинхронизация пакетов — сбрасываем стакан
             books.delete(symbol);
             return;
         }
@@ -229,6 +226,9 @@ function handleOrderbook(symbol, data) {
     processEngine(symbol);
 }
 
+// ----------------------------------------------------------------------------
+// 4. TRADES HANDLING WITH SINGLE-COUNT PROTECTION
+// ----------------------------------------------------------------------------
 function handleTrades(symbol, trades) {
     if (!trades || !trades.length) return;
     const book = books.get(symbol);
@@ -240,14 +240,21 @@ function handleTrades(symbol, trades) {
     const buffer = recentTrades.get(symbol);
 
     trades.forEach(t => {
-        buffer.push({ p: parseFloat(t.p), v: parseFloat(t.v), val: parseFloat(t.p)*parseFloat(t.v), side: t.S, t: now() });
+        buffer.push({
+            id: t.i || \`\${t.p}_\${t.v}_\${t.T || now()}\`,
+            p: parseFloat(t.p),
+            v: parseFloat(t.v),
+            val: parseFloat(t.p) * parseFloat(t.v),
+            side: t.S,
+            t: t.T || now()
+        });
     });
 
     processEngine(symbol);
 }
 
 // ----------------------------------------------------------------------------
-// 4. MATHEMATICS: VOLATILITY (PERCENTAGE ATR) & PEAK DENSITY
+// 5. MATHEMATICS: VOLATILITY (PERCENTAGE ATR) & PEAK DENSITY
 // ----------------------------------------------------------------------------
 function calculatePercentageATR(klines) {
     if (!klines || klines.length < 2) return 0;
@@ -270,7 +277,7 @@ function getMarketRegime(k5m, k1h) {
     if (atrPct1h === 0) return { isTradeable: false, rviNorm: 0 };
 
     const rviNorm = atrPct5m / atrPct1h;
-    const isTradeable = rviNorm >= 0.4 && rviNorm <= 2.2; // Исключаем флэт и дикий памп
+    const isTradeable = rviNorm >= 0.15 && rviNorm <= 3.5;
     return { isTradeable, rviNorm, atrPct5m };
 }
 
@@ -312,8 +319,7 @@ function findPeakDensityCluster(sourceMap, targetPrice, maxDistPct, minUsdVolume
     const coreConcentration = coreUsdVolume / windowTotalUsd;
     const peakSingleConcentration = maxSingleTickUsd / coreUsdVolume;
 
-    // Институциональные фильтры плотности
-    if (coreUsdVolume >= minUsdVolume && coreConcentration >= 0.60 && peakSingleConcentration >= 0.35) {
+    if (coreUsdVolume >= minUsdVolume && coreConcentration >= 0.50 && peakSingleConcentration >= 0.30) {
         return {
             clusterAvgPrice: weightedPriceSum / coreUsdVolume,
             peakPrice: levels[peakIndex].price,
@@ -331,7 +337,7 @@ function checkClusterDisappearance(symbol, book) {
     for (const [key, state] of wallStateMap.entries()) {
         if (state.symbol === symbol && state.status !== 'CANCELLED') {
             const source = state.side === 'LONG' ? book.bids : book.asks;
-            const cluster = findPeakDensityCluster(source, state.clusterAvgPrice, 0.002, getMinClusterSize(symbol) * 0.35);
+            const cluster = findPeakDensityCluster(source, state.clusterAvgPrice, 0.002, getMinClusterSize(symbol) * 0.30);
 
             if (!cluster) {
                 state.status = 'CANCELLED';
@@ -344,7 +350,7 @@ function checkClusterDisappearance(symbol, book) {
 }
 
 // ----------------------------------------------------------------------------
-// 5. ENGINE LOGIC & SIGNAL GENERATOR
+// 6. ENGINE LOGIC & SIGNAL GENERATOR (WITHOUT DOUBLE COUNT)
 // ----------------------------------------------------------------------------
 function processEngine(symbol) {
     const book = books.get(symbol);
@@ -367,7 +373,7 @@ function processEngine(symbol) {
         const minClusterSize = getMinClusterSize(symbol);
         const sourceMap = lvl.side === 'LONG' ? book.bids : book.asks;
 
-        const cluster = findPeakDensityCluster(sourceMap, lvl.p, 0.0025, minClusterSize);
+        const cluster = findPeakDensityCluster(sourceMap, lvl.p, 0.003, minClusterSize);
         if (!cluster) return;
 
         let state = wallStateMap.get(key) || {
@@ -378,6 +384,7 @@ function processEngine(symbol) {
             initialVal: cluster.coreUsdVolume,
             hitsCount: 0, absorbedVol: 0, touched: false, status: 'TRACKING',
             minPriceAfterTouch: price, maxPriceAfterTouch: price,
+            lastProcessedTradeTime: 0,
             lastUpdated: now()
         };
 
@@ -386,33 +393,46 @@ function processEngine(symbol) {
         state.clusterMaxP = cluster.maxPrice;
 
         const borderPrice = lvl.side === 'LONG' ? cluster.maxPrice : cluster.minPrice;
-        if (Math.abs(price - borderPrice) / borderPrice <= 0.0004) { state.touched = true; }
+        if (Math.abs(price - borderPrice) / borderPrice <= 0.0006) { state.touched = true; }
 
         if (state.touched) {
             state.minPriceAfterTouch = Math.min(state.minPriceAfterTouch, price);
             state.maxPriceAfterTouch = Math.max(state.maxPriceAfterTouch, price);
 
+            let maxTradeTimeInBatch = state.lastProcessedTradeTime;
+
+            // Считывание поглощения строго без повторного подсчета (Double Count Guard)
             trades.forEach(t => {
-                const isHit = (lvl.side === 'LONG' && t.side === 'Sell') || (lvl.side === 'SHORT' && t.side === 'Buy');
-                if (isHit && t.p >= cluster.minPrice * 0.999 && t.p <= cluster.maxPrice * 1.001) {
-                    state.hitsCount++;
-                    state.absorbedVol += t.val;
+                if (t.t > state.lastProcessedTradeTime) {
+                    const isHit = (lvl.side === 'LONG' && t.side === 'Sell') || 
+                                  (lvl.side === 'SHORT' && t.side === 'Buy');
+
+                    if (isHit && t.p >= cluster.minPrice * 0.999 && t.p <= cluster.maxPrice * 1.001) {
+                        state.hitsCount++;
+                        state.absorbedVol += t.val;
+                    }
+
+                    if (t.t > maxTradeTimeInBatch) {
+                        maxTradeTimeInBatch = t.t;
+                    }
                 }
             });
+
+            state.lastProcessedTradeTime = maxTradeTimeInBatch;
 
             let mktBuy = 0, mktSell = 0;
             trades.forEach(t => { if (t.side==='Buy') mktBuy+=t.val; else mktSell+=t.val; });
 
             const atrAbs5m = (regime.atrPct5m / 100) * price;
-            const requiredBounce = atrAbs5m * 0.15;
+            const requiredBounce = atrAbs5m * 0.04;
             const actualBounce = lvl.side === 'LONG' 
                 ? (price - state.minPriceAfterTouch) 
                 : (state.maxPriceAfterTouch - price);
 
             let sl = lvl.side === 'LONG' ? cluster.minPrice - (atrAbs5m * 0.15) : cluster.maxPrice + (atrAbs5m * 0.15);
 
-            if (state.hitsCount >= 3 && state.absorbedVol >= 30000 && actualBounce >= requiredBounce) {
-                const flowConfirm = lvl.side === 'LONG' ? (mktBuy > mktSell * 0.75) : (mktSell > mktBuy * 0.75);
+            if (state.hitsCount >= 1 && state.absorbedVol >= 8000 && actualBounce >= requiredBounce) {
+                const flowConfirm = lvl.side === 'LONG' ? (mktBuy > mktSell * 0.6) : (mktSell > mktBuy * 0.6);
                 
                 if (flowConfirm && state.status !== 'ENTRY') {
                     state.status = 'ENTRY';
@@ -467,7 +487,7 @@ function playBeep() {
 
 function priceFormat(v) { return Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4); }
 
-// Очередь запросов свечей для исключения HTTP 429
+// Безопасная загрузка свечей с 5-свечной моделью фракталов
 async function loadKlinesWithQueue(symbolList) {
     const total = symbolList.length;
     let completed = 0;
@@ -476,7 +496,7 @@ async function loadKlinesWithQueue(symbolList) {
         if (!running) break;
         try {
             const [res5m, res1h] = await Promise.all([
-                fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=30`),
+                fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=40`),
                 fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=60&limit=24`)
             ]);
 
@@ -488,9 +508,21 @@ async function loadKlinesWithQueue(symbolList) {
                 const k1h = json1h.result.list.map(k => ({ h: parseFloat(k[2]), l: parseFloat(k[3]), c: parseFloat(k[4]) })).reverse();
 
                 const highs = [], lows = [];
+                
+                // Строгая пятисвечная модель Swing-уровней (i-2, i-1, i, i+1, i+2)
                 for (let i = 2; i < k5m.length - 2; i++) {
-                    if (k5m[i].h > k5m[i-1].h && k5m[i].h > k5m[i+2].h) highs.push(k5m[i].h);
-                    if (k5m[i].l < k5m[i-1].l && k5m[i].l < k5m[i+2].l) lows.push(k5m[i].l);
+                    const isHigh = k5m[i].h > k5m[i-2].h && 
+                                   k5m[i].h > k5m[i-1].h && 
+                                   k5m[i].h > k5m[i+1].h && 
+                                   k5m[i].h > k5m[i+2].h;
+
+                    const isLow  = k5m[i].l < k5m[i-2].l && 
+                                   k5m[i].l < k5m[i-1].l && 
+                                   k5m[i].l < k5m[i+1].l && 
+                                   k5m[i].l < k5m[i+2].l;
+
+                    if (isHigh) highs.push(k5m[i].h);
+                    if (isLow)  lows.push(k5m[i].l);
                 }
 
                 if (worker) {
@@ -507,7 +539,7 @@ async function loadKlinesWithQueue(symbolList) {
         document.getElementById("loadProgress").innerText = `${pct}%`;
         document.getElementById("progressFill").style.width = `${pct}%`;
 
-        // Задержка 120 мс между запросами для безопасности по Rate Limit
+        // Задержка 120 мс между запросами против Rate Limit
         await new Promise(r => setTimeout(r, 120));
     }
 }
@@ -601,7 +633,7 @@ async function startEngine() {
 
     document.getElementById("emptyState").innerText = "Загрузка топ-100 монет и инициализация свечей...";
     
-    // 1. Получение Top-100 монет
+    // 1. Загрузка топ-100 монет по суточному объему
     const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
     const json = await res.json();
     symbols.length = 0; symbolMetrics.clear();
@@ -620,10 +652,10 @@ async function startEngine() {
     });
     document.getElementById("coinCount").innerText = symbols.length;
 
-    // 2. Безопасная очередь загрузки свечей через REST
+    // 2. Безопасная очередь загрузки свечей с задержкой
     await loadKlinesWithQueue(symbols);
 
-    // 3. Запуск Web Worker и HFT-сокетов
+    // 3. Запуск Worker и WebSocket сокетов
     worker.postMessage({ type: 'START', payload: { symbols, metrics: metricsArr } });
     document.getElementById("emptyState").innerText = "Мониторинг запущен. Ожидание институциональных сигналов...";
 }
