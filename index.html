@@ -3,12 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Bybit Institutional OrderFlow v11 PRO</title>
+<title>Bybit Institutional OrderFlow v11 PRO (Fixed)</title>
 
 <style>
-
 *{box-sizing:border-box}
-
 body{
 margin:0;
 padding:12px;
@@ -17,7 +15,6 @@ color:#eaebed;
 font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
 font-size:13px;
 }
-
 .header{
 background:#0e1217;
 border:1px solid #1c232d;
@@ -30,7 +27,6 @@ align-items:center;
 gap:10px;
 flex-wrap:wrap;
 }
-
 button{
 background:#f0b90b;
 border:0;
@@ -39,28 +35,10 @@ border-radius:7px;
 font-weight:700;
 cursor:pointer;
 }
-
-.stop{
-background:#f6465d;
-color:white;
-}
-
-.clear{
-background:#2b313a;
-color:white;
-}
-
-#status{
-margin-top:4px;
-color:#8f98a5;
-font-size:12px;
-}
-
-#signals{
-height:79vh;
-overflow:auto;
-}
-
+.stop{background:#f6465d;color:white;}
+.clear{background:#2b313a;color:white;}
+#status{margin-top:4px;color:#8f98a5;font-size:12px;}
+#signals{height:79vh;overflow:auto;}
 .card{
 background:#0e1217;
 border:1px solid #1c232d;
@@ -71,79 +49,17 @@ margin-bottom:10px;
 box-shadow:0 4px 12px rgba(0,0,0,.35);
 transition:.2s;
 }
-
-.card.short{
-border-left-color:#f6465d;
-}
-
-.card-head{
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-bottom:10px;
-}
-
-.grid{
-display:grid;
-grid-template-columns:repeat(5,1fr);
-gap:6px;
-margin-bottom:8px;
-}
-
-.box{
-background:#141921;
-padding:6px 8px;
-border-radius:6px;
-font-size:11px;
-color:#97a1ae;
-}
-
-.box b{
-display:block;
-font-size:13px;
-margin-top:2px;
-color:white;
-}
-
-.tags{
-display:flex;
-flex-wrap:wrap;
-gap:4px;
-margin-top:6px;
-}
-
-.tag{
-background:#1d2430;
-padding:2px 6px;
-border-radius:4px;
-font-size:10px;
-}
-
-.score{
-padding:4px 8px;
-border-radius:6px;
-font-weight:800;
-font-size:12px;
-}
-
-.score.high{
-background:#0ecb8120;
-color:#0ecb81;
-border:1px solid #0ecb81;
-}
-
-.score.mid{
-background:#f39c1220;
-color:#f39c12;
-border:1px solid #f39c12;
-}
-
-.score.low{
-background:#f6465d20;
-color:#f6465d;
-border:1px solid #f6465d;
-}
-
+.card.short{border-left-color:#f6465d;}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:8px;}
+.box{background:#141921;padding:6px 8px;border-radius:6px;font-size:11px;color:#97a1ae;}
+.box b{display:block;font-size:13px;margin-top:2px;color:white;}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.tag{background:#1d2430;padding:2px 6px;border-radius:4px;font-size:10px;}
+.score{padding:4px 8px;border-radius:6px;font-weight:800;font-size:12px;}
+.score.high{background:#0ecb8120;color:#0ecb81;border:1px solid #0ecb81;}
+.score.mid{background:#f39c1220;color:#f39c12;border:1px solid #f39c12;}
+.score.low{background:#f6465d20;color:#f6465d;border:1px solid #f6465d;}
 .info{
 display:flex;
 justify-content:space-between;
@@ -153,1918 +69,749 @@ border-top:1px dashed #29313d;
 font-size:11px;
 color:#8f98a5;
 }
-
 </style>
 </head>
 <body>
 
 <div class="header">
-
 <div>
 <h3 style="margin:0">⚡ Bybit Institutional OrderFlow v11 PRO</h3>
 <div id="status">Статус: готов к запуску</div>
 </div>
-
 <div>
 <button onclick="start()">▶ Старт</button>
 <button class="stop" onclick="stop()">⏹ Стоп</button>
 <button class="clear" onclick="clearCards()">🗑 Очистить</button>
 </div>
-
 </div>
 
 <div id="signals">
-<div>Нажмите «Старт» для запуска сканера.</div>
+<div style="padding:20px;text-align:center;color:#8f98a5">Нажмите «Старт» для запуска сканера.</div>
 </div>
 
 <script>
+const DEPTH = 50;
+const TOP = 80;
+const SIGNAL_TTL = 900000;
+const COOLDOWN = 90000;
 
-const DEPTH=50;
-const TOP=80;
+let run = false;
+let ws = [];
+let reconnecting = false;
+let reconnectLock = false;
 
-const SIGNAL_TTL=900000;
-const COOLDOWN=90000;
+let pingTimer = null;
+let watchdogTimer = null;
+let swingRefreshTimer = null;
+let debounceTimer = null;
+let managerTimer = null;
+let audioCtx = null;
 
-let run=false;
+let books = new Map();
+let trades = new Map();
+let zones = new Map();
+let signals = new Map();
+let metrics = new Map();
+let cooldowns = new Map();
+let wallHistory = new Map();
+let instrumentCache = new Map();
 
-let ws=[];
+let symbols = [];
+let pending = new Set();
+let lastRx = Date.now();
 
-let reconnecting=false;
+const S = document.getElementById("signals");
+const ST = document.getElementById("status");
 
-let pingTimer=null;
-let watchdogTimer=null;
-let swingRefreshTimer=null;
-let debounceTimer=null;
-let managerTimer=null;
+const now = () => Date.now();
+const pf = v => Number(v) >= 1000 ? Number(v).toFixed(2) : Number(v).toFixed(4);
 
-let books=new Map();
-let trades=new Map();
-let zones=new Map();
-let signals=new Map();
-let metrics=new Map();
-let cooldowns=new Map();
-let wallHistory=new Map();
-
-let symbols=[];
-let pending=new Set();
-
-let lastRx=Date.now();
-
-const S=document.getElementById("signals");
-const ST=document.getElementById("status");
-
-const now=()=>Date.now();
-
-const pf=v=>Number(v)>=1000?Number(v).toFixed(2):Number(v).toFixed(4);
-
-document.addEventListener("visibilitychange",()=>{
-
-if(document.visibilityState==="visible"&&run){
-
-repairConnection();
-
-}
-
-});
-
-function resetRuntime(){
-
+function resetRuntime() {
 books.clear();
 trades.clear();
 wallHistory.clear();
 pending.clear();
-
 }
 
-function closeSockets(){
-
-ws.forEach(x=>{
-
-try{
-
-x.onopen=null;
-x.onmessage=null;
-x.onerror=null;
-x.onclose=null;
+function closeSockets() {
+ws.forEach(x => {
+try {
+x.onopen = null;
+x.onmessage = null;
+x.onerror = null;
+x.onclose = null;
 x.close();
-
-}catch(e){}
-
+} catch(e) {}
 });
+ws = [];
+}
+// ==========================================================
+// REST API И ЗАГРУЗКА ИНСТРУМЕНТОВ С ЗАЩИТОЙ ОТ RATE LIMIT (429)
+// ==========================================================
 
-ws=[];
-
+async function loadInstrumentInfo() {
+try {
+const r = await fetch("https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000");
+const j = await r.json();
+(j.result?.list || []).forEach(i => {
+instrumentCache.set(i.symbol, {
+tickSize: +(i.priceFilter?.tickSize || 0.0001),
+qtyStep: +(i.lotSizeFilter?.qtyStep || 0.001)
+});
+});
+} catch(e) {
+console.warn("Ошибка загрузки спецификаций контрактов", e);
+}
 }
 
-async function start(){
+async function start() {
+if (run) return;
+run = true;
 
-if(run)return;
+ST.textContent = "Инициализация и загрузка спецификаций...";
+await loadInstrumentInfo();
 
-run=true;
+ST.textContent = "Получение списка монет...";
 
-ST.textContent="Получение списка монет...";
+try {
+const res = await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
+const json = await res.json();
 
-try{
+const exclude = new Set(["BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"]);
 
-const res=await fetch("https://api.bybit.com/v5/market/tickers?category=linear");
-
-const json=await res.json();
-
-const exclude=new Set([
-"BTCUSDT",
-"ETHUSDT",
-"SOLUSDT",
-"XRPUSDT",
-"DOGEUSDT"
-]);
-
-symbols=[];
-
+symbols = [];
 metrics.clear();
 
 json.result.list
-.filter(x=>x.symbol.endsWith("USDT"))
-.filter(x=>!exclude.has(x.symbol))
-.sort((a,b)=>+b.turnover24h-+a.turnover24h)
-.slice(0,TOP)
-.forEach((x,i)=>{
-
+.filter(x => x.symbol.endsWith("USDT"))
+.filter(x => !exclude.has(x.symbol))
+.sort((a, b) => +b.turnover24h - +a.turnover24h)
+.slice(0, TOP)
+.forEach((x, i) => {
 symbols.push(x.symbol);
-
-metrics.set(x.symbol,{
-rank:i+1,
-turnover:+x.turnover24h,
-tickSize:+(x.priceFilter?.tickSize||0.0001)
+const cached = instrumentCache.get(x.symbol);
+metrics.set(x.symbol, {
+rank: i + 1,
+turnover: +x.turnover24h,
+tickSize: cached ? cached.tickSize : +(x.priceFilter?.tickSize || 0.0001)
+});
 });
 
-});
-
-let loaded=0;
-
-for(const s of symbols){
-
+let loaded = 0;
+for (const s of symbols) {
+if (!run) return;
 await loadSwings(s);
-
 loaded++;
-
-ST.textContent=`Разметка HTF: ${loaded}/${symbols.length}`;
-
-await new Promise(r=>setTimeout(r,20));
-
+ST.textContent = `Разметка HTF: ${loaded}/${symbols.length}`;
+// Пауза 80 мс для защиты от ошибки HTTP 429 (Too Many Requests)
+await new Promise(r => setTimeout(r, 80));
 }
 
 connectSockets();
-
 startBackgroundJobs();
+ST.textContent = `Мониторинг запущен (${symbols.length} монет)`;
 
-ST.textContent=`Мониторинг запущен (${symbols.length} монет)`;
-
-}catch(e){
-
-run=false;
-
-ST.textContent="Ошибка запуска";
-
+} catch(e) {
+run = false;
+ST.textContent = "Ошибка запуска";
+}
 }
 
-}
-  // ==========================================================
-// ЗАГРУЗКА HTF ЗОН (4H / 1H / 15M)
+// ==========================================================
+// ЗАГРУЗКА HTF ЗОН (ИСКЛЮЧАЯ НЕЗАКРЫТУЮ СВЕЧУ)
 // ==========================================================
 
-async function loadSwings(symbol){
+async function loadSwings(symbol) {
+try {
+const fetchK = (tf, lim) => fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=${tf}&limit=${lim}`)
+.then(r => r.ok ? r.json() : null);
 
-try{
+const r4 = await fetchK(240, 60);
+const r1 = await fetchK(60, 60);
+const r15 = await fetchK(15, 60);
+const r5 = await fetchK(5, 40);
 
-const[r4,r1,r15,r5]=await Promise.all([
-
-fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=240&limit=60`).then(r=>r.json()),
-
-fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=60&limit=60`).then(r=>r.json()),
-
-fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=15&limit=60`).then(r=>r.json()),
-
-fetch(`https://api.bybit.com/v5/market/kline?category=linear&symbol=${symbol}&interval=5&limit=40`).then(r=>r.json())
-
-]);
-
-const parse=list=>(list||[]).map(x=>({
-
-h:+x[2],
-l:+x[3],
-c:+x[4]
-
+const parse = list => (list || []).map(x => ({
+h: +x[2],
+l: +x[3],
+c: +x[4]
 })).reverse();
 
-const k4=parse(r4.result?.list);
-const k1=parse(r1.result?.list);
-const k15=parse(r15.result?.list);
-const k5=parse(r5.result?.list);
+// .slice(0, -1) отсекает текущую формующуюся свечу от фрактального анализа
+const k4 = parse(r4?.result?.list).slice(0, -1);
+const k1 = parse(r1?.result?.list).slice(0, -1);
+const k15 = parse(r15?.result?.list).slice(0, -1);
+const k5 = parse(r5?.result?.list);
 
-let raw=[];
+let raw = [];
+extractFractals(k4, "4H", 3, raw);
+extractFractals(k1, "1H", 2, raw);
+extractFractals(k15, "15M", 1, raw);
 
-extractFractals(k4,"4H",3,raw);
-extractFractals(k1,"1H",2,raw);
-extractFractals(k15,"15M",1,raw);
-
-zones.set(symbol,{
-zones:buildZones(raw),
-k5m:k5
+zones.set(symbol, {
+zones: buildZones(raw),
+k5m: k5
 });
-
-}catch(e){}
-
+} catch(e) {}
 }
 
-function extractFractals(arr,tf,weight,out){
+function extractFractals(arr, tf, weight, out) {
+if (!arr || arr.length < 5) return;
+for (let i = 2; i < arr.length - 2; i++) {
+const H = arr[i].h;
+const L = arr[i].l;
 
-for(let i=2;i<arr.length-2;i++){
-
-const H=arr[i].h;
-const L=arr[i].l;
-
-if(
-H>arr[i-1].h&&
-H>arr[i-2].h&&
-H>arr[i+1].h&&
-H>arr[i+2].h
-){
-
-out.push({
-price:H,
-side:"SHORT",
-tf,
-weight
-});
-
+if (H > arr[i-1].h && H > arr[i-2].h && H > arr[i+1].h && H > arr[i+2].h) {
+out.push({ price: H, side: "SHORT", tf, weight });
+}
+if (L < arr[i-1].l && L < arr[i-2].l && L < arr[i+1].l && L < arr[i+2].l) {
+out.push({ price: L, side: "LONG", tf, weight });
+}
+}
 }
 
-if(
-L<arr[i-1].l&&
-L<arr[i-2].l&&
-L<arr[i+1].l&&
-L<arr[i+2].l
-){
-
-out.push({
-price:L,
-side:"LONG",
-tf,
-weight
-});
-
-}
-
-}
-
-}
-
-// ==========================================================
-// ОБЪЕДИНЕНИЕ УРОВНЕЙ В ЗОНЫ
-// ==========================================================
-
-function buildZones(raw){
-
-const merge=list=>{
-
-list.sort((a,b)=>a.price-b.price);
-
-const out=[];
-
-for(const lvl of list){
-
-if(!out.length){
-
-out.push({
-min:lvl.price,
-max:lvl.price,
-tf:lvl.tf,
-weight:lvl.weight,
-side:lvl.side
-});
-
+function buildZones(raw) {
+const merge = list => {
+list.sort((a, b) => a.price - b.price);
+const out = [];
+for (const lvl of list) {
+if (!out.length) {
+out.push({ min: lvl.price, max: lvl.price, tf: lvl.tf, weight: lvl.weight, side: lvl.side });
 continue;
-
 }
-
-const last=out[out.length-1];
-
-if((lvl.price-last.max)/last.max<=0.0035){
-
-last.max=lvl.price;
-
-if(lvl.weight>last.weight){
-
-last.weight=lvl.weight;
-last.tf=lvl.tf;
-
+const last = out[out.length - 1];
+if ((lvl.price - last.max) / last.max <= 0.0035) {
+last.max = lvl.price;
+if (lvl.weight > last.weight) {
+last.weight = lvl.weight;
+last.tf = lvl.tf;
 }
-
-}else{
-
-out.push({
-min:lvl.price,
-max:lvl.price,
-tf:lvl.tf,
-weight:lvl.weight,
-side:lvl.side
-});
-
+} else {
+out.push({ min: lvl.price, max: lvl.price, tf: lvl.tf, weight: lvl.weight, side: lvl.side });
 }
-
 }
-
 return out;
-
 };
 
-return[
-...merge(raw.filter(x=>x.side==="LONG")),
-...merge(raw.filter(x=>x.side==="SHORT"))
+return [
+...merge(raw.filter(x => x.side === "LONG")),
+...merge(raw.filter(x => x.side === "SHORT"))
 ];
-
 }
 
-// ==========================================================
-// ATR
-// ==========================================================
-
-function atr(k){
-
-if(!k||k.length<2)return 0;
-
-let sum=0;
-
-for(let i=1;i<k.length;i++){
-
-sum+=Math.max(
-
-k[i].h-k[i].l,
-
-Math.abs(k[i].h-k[i-1].c),
-
-Math.abs(k[i].l-k[i-1].c)
-
+function atr(k) {
+if (!k || k.length < 2) return 0;
+let sum = 0;
+for (let i = 1; i < k.length; i++) {
+sum += Math.max(
+k[i].h - k[i].l,
+Math.abs(k[i].h - k[i-1].c),
+Math.abs(k[i].l - k[i-1].c)
 );
-
 }
-
-return sum/(k.length-1);
-
+return sum / (k.length - 1);
 }
 
 // ==========================================================
-// НАСТОЯЩИЙ PEAK DENSITY CLUSTER
+// РАСЧЕТ ПЛОТНОСТЕЙ И КЛАСТЕРОВ СТАКАНА
 // ==========================================================
 
-function getPeakCluster(map,center,symbol){
+function getPeakCluster(map, center, symbol) {
+if (!map || !map.size) return null;
+const tick = metrics.get(symbol)?.tickSize || 0.0001;
+const levels = [];
 
-if(!map||!map.size)return null;
-
-const tick=metrics.get(symbol)?.tickSize||0.0001;
-
-const levels=[];
-
-for(const[p,q]of map){
-
-if(Math.abs(p-center)/center<=0.003){
-
-levels.push({
-
-price:p,
-usd:p*q
-
-});
-
+for (const [p, q] of map) {
+if (Math.abs(p - center) / center <= 0.003) {
+levels.push({ price: p, usd: p * q });
+}
 }
 
+if (!levels.length) return null;
+levels.sort((a, b) => a.price - b.price);
+
+let peak = levels[0];
+for (const l of levels) {
+if (l.usd > peak.usd) peak = l;
 }
 
-if(!levels.length)return null;
+let core = 0;
+let windowUsd = 0;
+let weighted = 0;
+let ticks = 0;
 
-levels.sort((a,b)=>a.price-b.price);
-
-let peak=levels[0];
-
-for(const l of levels){
-
-if(l.usd>peak.usd)peak=l;
-
-}
-
-let core=0;
-let window=0;
-let weighted=0;
-let ticks=0;
-
-for(const l of levels){
-
-window+=l.usd;
-
-if(Math.abs(l.price-peak.price)<=tick*2.5){
-
-core+=l.usd;
-weighted+=l.price*l.usd;
+for (const l of levels) {
+windowUsd += l.usd;
+if (Math.abs(l.price - peak.price) <= tick * 2.5) {
+core += l.usd;
+weighted += l.price * l.usd;
 ticks++;
-
+}
 }
 
-}
+const concentration = core / windowUsd;
+const min = Math.max(15000, (metrics.get(symbol)?.turnover || 5000000) / 1440 * 1.8);
 
-const concentration=core/window;
+if (core < min) return null;
+// Порог концентрации снижен до 0.35, чтобы не отбрасывать плотности в широком стакане
+if (concentration < 0.35) return null;
 
-const min=Math.max(
-15000,
-(metrics.get(symbol)?.turnover||5000000)/1440*1.8
-);
-
-if(core<min)return null;
-if(concentration<0.60)return null;
-
-return{
-
-peakPrice:weighted/core,
-
-coreUsd:core,
-
-windowUsd:window,
-
+return {
+peakPrice: weighted / core,
+coreUsd: core,
+windowUsd,
 concentration,
-
 ticks
-
 };
-
 }
-  // ==========================================================
-// WEBSOCKET ENGINE v11
+// ==========================================================
+// WEBSOCKET ENGINE (С ИСПРАВЛЕННОЙ ВАЛИДАЦИЕЙ SEQ)
 // ==========================================================
 
-function connectSockets(){
-
+function connectSockets() {
 closeSockets();
+ws = [];
+lastRx = now();
 
-ws=[];
-
-lastRx=now();
-
-for(let i=0;i<symbols.length;i+=20){
-
-const group=symbols.slice(i,i+20);
-
+for (let i = 0; i < symbols.length; i += 20) {
+const group = symbols.slice(i, i + 20);
 createSocket(group);
-
 }
 
-if(pingTimer)clearInterval(pingTimer);
-
-pingTimer=setInterval(()=>{
-
-ws.forEach(s=>{
-
-if(s.readyState===WebSocket.OPEN){
-
-s.send(JSON.stringify({op:"ping"}));
-
+if (pingTimer) clearInterval(pingTimer);
+pingTimer = setInterval(() => {
+ws.forEach(s => {
+if (s.readyState === WebSocket.OPEN) {
+s.send(JSON.stringify({ op: "ping" }));
 }
-
 });
-
-},20000);
-
+}, 20000);
 }
 
-function createSocket(group){
-
-const socket=new WebSocket("wss://stream.bybit.com/v5/public/linear");
-
+function createSocket(group) {
+const socket = new WebSocket("wss://stream.bybit.com/v5/public/linear");
 ws.push(socket);
 
-socket.onopen=async()=>{
-
-const args=[];
-
-group.forEach(sym=>{
-
+socket.onopen = async () => {
+const args = [];
+group.forEach(sym => {
 args.push(`orderbook.${DEPTH}.${sym}`);
 args.push(`publicTrade.${sym}`);
-
 });
 
-for(let i=0;i<args.length;i+=10){
-
-if(socket.readyState!==WebSocket.OPEN)break;
-
-socket.send(JSON.stringify({
-
-op:"subscribe",
-args:args.slice(i,i+10)
-
-}));
-
-await new Promise(r=>setTimeout(r,60));
-
+for (let i = 0; i < args.length; i += 10) {
+if (socket.readyState !== WebSocket.OPEN) break;
+socket.send(JSON.stringify({ op: "subscribe", args: args.slice(i, i + 10) }));
+await new Promise(r => setTimeout(r, 60));
 }
-
 };
 
-socket.onmessage=e=>{
+socket.onmessage = e => {
+if (!run) return;
+lastRx = now();
 
-if(!run)return;
+try {
+const d = JSON.parse(e.data);
+if (!d.topic) return;
+const p = d.topic.split(".");
+const type = p[0];
+const symbol = p[p.length - 1];
 
-lastRx=now();
-
-try{
-
-const d=JSON.parse(e.data);
-
-if(!d.topic)return;
-
-const p=d.topic.split(".");
-const type=p[0];
-const symbol=p[p.length-1];
-
-if(type==="orderbook")handleBook(symbol,d);
-else if(type==="publicTrade")handleTrades(symbol,d.data);
-
-}catch(e){}
-
+if (type === "orderbook") handleBook(symbol, d);
+else if (type === "publicTrade") handleTrades(symbol, d.data);
+} catch(e) {}
 };
 
-socket.onerror=()=>{
+socket.onerror = () => { if (run) setTimeout(repairConnection, 1200); };
+socket.onclose = () => { if (run) setTimeout(repairConnection, 1200); };
+}
 
-if(run)setTimeout(repairConnection,1200);
-
+function handleBook(symbol, data) {
+let book = books.get(symbol) || {
+bids: new Map(),
+asks: new Map(),
+last: 0,
+seq: 0,
+valid: false
 };
 
-socket.onclose=()=>{
-
-if(run)setTimeout(repairConnection,1200);
-
-};
-
-}
-
-// ==========================================================
-// AUTO REPAIR
-// ==========================================================
-
-function repairConnection(){
-
-if(!run)return;
-
-if(reconnecting)return;
-
-const dead=ws.length===0||ws.some(x=>x.readyState!==WebSocket.OPEN);
-
-const stale=now()-lastRx>12000;
-
-if(!dead&&!stale)return;
-
-reconnecting=true;
-
-ST.textContent="Восстановление соединения...";
-
-resetRuntime();
-
-connectSockets();
-
-setTimeout(()=>{
-
-reconnecting=false;
-
-if(run){
-
-ST.textContent=`Мониторинг запущен (${symbols.length} монет)`;
-
-}
-
-},2500);
-
-}
-
-function startWatchdog(){
-
-if(watchdogTimer)clearInterval(watchdogTimer);
-
-watchdogTimer=setInterval(()=>{
-
-repairConnection();
-
-},5000);
-
-}
-
-// ==========================================================
-// ORDERBOOK ENGINE
-// ==========================================================
-
-function handleBook(symbol,data){
-
-let book=books.get(symbol)||{
-
-bids:new Map(),
-asks:new Map(),
-
-last:0,
-
-seq:0,
-
-valid:false
-
-};
-
-if(data.type==="snapshot"){
-
+if (data.type === "snapshot") {
 book.bids.clear();
 book.asks.clear();
+(data.data.b || []).forEach(o => book.bids.set(+o[0], +o[1]));
+(data.data.a || []).forEach(o => book.asks.set(+o[0], +o[1]));
+book.seq = data.data.u || 0;
+book.valid = true;
+} else {
+if (!book.valid) return;
+const seq = data.data.u || 0;
+if (seq <= book.seq) return; // Игнорируем старые пакеты
 
-data.data.b.forEach(o=>book.bids.set(+o[0],+o[1]));
-data.data.a.forEach(o=>book.asks.set(+o[0],+o[1]));
-
-book.seq=data.data.u||data.data.seq||0;
-
-book.valid=true;
-
-}else{
-
-if(!book.valid)return;
-
-const seq=data.data.u||data.data.seq||0;
-
-if(seq<=book.seq)return;
-
-if(book.seq!==0&&seq!==book.seq+1){
-
-book.valid=false;
-
-pending.add(symbol);
-
-books.set(symbol,book);
-
-return;
-
-}
-
-data.data.b.forEach(o=>{
-
-+o[1]
-?book.bids.set(+o[0],+o[1])
-:book.bids.delete(+o[0]);
-
+// Исправление: Не сбрасываем book.valid при seq !== seq + 1, так как Bybit пропускает ID в дельтах
+(data.data.b || []).forEach(o => {
++o[1] ? book.bids.set(+o[0], +o[1]) : book.bids.delete(+o[0]);
 });
-
-data.data.a.forEach(o=>{
-
-+o[1]
-?book.asks.set(+o[0],+o[1])
-:book.asks.delete(+o[0]);
-
+(data.data.a || []).forEach(o => {
++o[1] ? book.asks.set(+o[0], +o[1]) : book.asks.delete(+o[0]);
 });
-
-book.seq=seq;
-
+book.seq = seq;
 }
 
-books.set(symbol,book);
-
+books.set(symbol, book);
 pending.add(symbol);
-
 }
 
-// ==========================================================
-// TRADES BUFFER
-// ==========================================================
+function handleTrades(symbol, list) {
+if (!list || !list.length) return;
 
-function handleTrades(symbol,list){
-
-if(!list||!list.length)return;
-
-let book=books.get(symbol)||{
-
-bids:new Map(),
-
-asks:new Map(),
-
-last:0,
-
-seq:0,
-
-valid:false
-
+let book = books.get(symbol) || {
+bids: new Map(), asks: new Map(), last: 0, seq: 0, valid: false
 };
+book.last = +list[0].p;
+books.set(symbol, book);
 
-book.last=+list[0].p;
+if (!trades.has(symbol)) trades.set(symbol, []);
+const buf = trades.get(symbol);
 
-books.set(symbol,book);
-
-if(!trades.has(symbol)){
-
-trades.set(symbol,[]);
-
-}
-
-const buf=trades.get(symbol);
-
-list.forEach(t=>{
-
+list.forEach(t => {
 buf.push({
-
-p:+t.p,
-
-qty:+t.v,
-
-usd:+t.p*+t.v,
-
-side:t.S,
-
-id:t.i,
-
-time:t.T||now()
-
+p: +t.p,
+qty: +t.v,
+usd: +t.p * +t.v,
+side: t.S,
+id: t.i,
+time: t.T || now()
+});
 });
 
-});
-
-const cut=now()-20000;
-
-while(buf.length&&buf[0].time<cut){
-
+// Увеличен буфер сделок до 120 секунд для корректного анализа поглощения
+const cut = now() - 120000;
+while (buf.length && buf[0].time < cut) {
 buf.shift();
-
 }
 
 pending.add(symbol);
-
 }
 
-// ==========================================================
-// DEBOUNCE
-// ==========================================================
-
-function startDebounceEngine(){
-
-if(debounceTimer)clearInterval(debounceTimer);
-
-debounceTimer=setInterval(()=>{
-
-if(!run)return;
-
-if(!pending.size)return;
-
-const list=[...pending];
-
-pending.clear();
-
-list.forEach(scan);
-
-},120);
-
-}
-  // ==========================================================
-// CVD
-// ==========================================================
-
-function getCvd(symbol){
-
-const arr=trades.get(symbol)||[];
-
-let buy=0;
-let sell=0;
-
-for(const t of arr){
-
-if(t.side==="Buy") buy+=t.usd;
-else sell+=t.usd;
-
-}
-
-return{
-buy,
-sell,
-delta:buy-sell
-};
-
-}
-
-// ==========================================================
-// WALL ANALYZER
-// ==========================================================
-
-function analyzeWall(symbol,side,cluster){
-
-const key=`${symbol}_${side}_${cluster.peakPrice.toFixed(6)}`;
-
-let state=wallHistory.get(key);
-
-if(!state){
-
-state={
-
-firstSeen:now(),
-
-lastSeen:now(),
-
-maxUsd:cluster.coreUsd
-
-};
-
-wallHistory.set(key,state);
-
-}else{
-
-state.lastSeen=now();
-
-if(cluster.coreUsd>state.maxUsd){
-
-state.maxUsd=cluster.coreUsd;
-
-}
-
-}
-
-const age=(state.lastSeen-state.firstSeen)/1000;
-
-let marketHits=0;
-
-const arr=trades.get(symbol)||[];
-
-for(const t of arr){
-
-const hit=side==="LONG"
-?t.side==="Sell"
-:t.side==="Buy";
-
-if(hit&&Math.abs(t.p-cluster.peakPrice)/cluster.peakPrice<0.002){
-
-marketHits+=t.usd;
-
-}
-
-}
-
-const eaten=Math.max(0,state.maxUsd-cluster.coreUsd);
-
-const absorption=eaten>0
-?marketHits/eaten
-:(marketHits>0?1:0);
-
-const spoof=eaten>marketHits*2.5&&cluster.coreUsd<state.maxUsd*0.30;
-
-return{
-
-age,
-
-marketHits,
-
-eaten,
-
-absorption,
-
-spoof
-
-};
-
-}
-
-// ==========================================================
-// MAIN SCANNER
-// ==========================================================
-
-function scan(symbol){
-
-const book=books.get(symbol);
-const zoneData=zones.get(symbol);
-
-if(!book||!book.valid)return;
-if(!zoneData)return;
-if(!book.last)return;
-
-const active=zoneData.zones.filter(z=>{
-
-const tol=z.tf==="4H"
-?0.004
-:z.tf==="1H"
-?0.0025
-:0.0015;
-
-return book.last>=z.min*(1-tol)&&book.last<=z.max*(1+tol);
-
-});
-
-if(!active.length)return;
-
-const nearLong=zoneData.zones.find(z=>z.side==="LONG"&&Math.abs(book.last-z.max)/book.last<0.01);
-
-const nearShort=zoneData.zones.find(z=>z.side==="SHORT"&&Math.abs(book.last-z.min)/book.last<0.01);
-
-if(nearLong&&nearShort){
-
-const width=(nearShort.min-nearLong.max)/book.last;
-
-if(width<0.008){
-
+function repairConnection() {
+if (!run || reconnectLock) return;
+reconnectLock = true;
+
+const dead = ws.length === 0 || ws.some(x => x.readyState !== WebSocket.OPEN);
+const stale = now() - lastRx > 12000;
+
+if (!dead && !stale) {
+reconnectLock = false;
 return;
-
 }
 
+ST.textContent = "Восстановление соединения...";
+resetRuntime();
+connectSockets();
+
+setTimeout(() => {
+reconnectLock = false;
+if (run) ST.textContent = `Мониторинг запущен (${symbols.length} монет)`;
+}, 2500);
 }
 
-const cvd=getCvd(symbol);
-
-const A=atr(zoneData.k5m);
-
-for(const zone of active){
-
-const cooldownKey=`${symbol}_${zone.side}`;
-
-if(cooldowns.has(cooldownKey)&&cooldowns.get(cooldownKey)>now()){
-
-continue;
-
+function startWatchdog() {
+if (watchdogTimer) clearInterval(watchdogTimer);
+watchdogTimer = setInterval(() => { repairConnection(); }, 5000);
 }
 
-const opposite=zone.side==="LONG"
-?"SHORT"
-:"LONG";
+function startDebounceEngine() {
+if (debounceTimer) clearInterval(debounceTimer);
+debounceTimer = setInterval(() => {
+if (!run || !pending.size) return;
+const list = [...pending];
+pending.clear();
+list.forEach(scan);
+}, 120);
+}
+// ==========================================================
+// АНАЛИЗАТОР СТЕН И ГЛАВНЫЙ СКАЧАЮЩИЙ ДВИЖОК
+// ==========================================================
 
-if([...signals.values()].some(s=>s.symbol===symbol&&s.side===opposite)){
+function analyzeWall(symbol, side, cluster) {
+const tick = metrics.get(symbol)?.tickSize || 0.0001;
+// Округление цены до тика предотвращает дублирование ключей при микроколебаниях
+const gridPrice = Math.round(cluster.peakPrice / tick) * tick;
+const key = `${symbol}_${side}_${gridPrice.toFixed(6)}`;
 
-continue;
-
+let state = wallHistory.get(key);
+if (!state) {
+state = { firstSeen: now(), lastSeen: now(), maxUsd: cluster.coreUsd };
+wallHistory.set(key, state);
+} else {
+state.lastSeen = now();
+if (cluster.coreUsd > state.maxUsd) state.maxUsd = cluster.coreUsd;
 }
 
-const center=zone.side==="LONG"
-?zone.min
-:zone.max;
+const age = (state.lastSeen - state.firstSeen) / 1000;
+let marketHits = 0;
+const arr = trades.get(symbol) || [];
 
-const cluster=getPeakCluster(
-
-zone.side==="LONG"
-?book.bids
-:book.asks,
-
-center,
-
-symbol
-
-);
-
-if(!cluster)continue;
-
-const wall=analyzeWall(symbol,zone.side,cluster);
-
-if(wall.spoof)continue;
-
-const bounced=zone.side==="LONG"
-?book.last>=cluster.peakPrice+A*0.15
-:book.last<=cluster.peakPrice-A*0.15;
-
-if(!bounced)continue;
-
-const cvdOk=zone.side==="LONG"
-?cvd.delta>=-5000
-:cvd.delta<=5000;
-
-if(!cvdOk)continue;
-
-// ==============================
-// QUALITY SCORE
-// ==============================
-
-let score=0;
-
-const reasons=[];
-
-if(zone.tf==="4H"){
-
-score+=30;
-reasons.push("4H зона");
-
-}else if(zone.tf==="1H"){
-
-score+=20;
-reasons.push("1H зона");
-
-}else{
-
-score+=10;
-reasons.push("15M зона");
-
+for (const t of arr) {
+const hit = side === "LONG" ? t.side === "Sell" : t.side === "Buy";
+if (hit && Math.abs(t.p - cluster.peakPrice) / cluster.peakPrice < 0.002) {
+marketHits += t.usd;
+}
 }
 
-if(cluster.concentration>=0.75){
+const eaten = Math.max(0, state.maxUsd - cluster.coreUsd);
+const absorption = eaten > 0 ? marketHits / eaten : (marketHits > 0 ? 1 : 0);
+const spoof = eaten > marketHits * 2.5 && cluster.coreUsd < state.maxUsd * 0.30;
 
-score+=20;
-reasons.push(`Ядро ${(cluster.concentration*100).toFixed(0)}%`);
-
-}else{
-
-score+=10;
-reasons.push(`Ядро ${(cluster.concentration*100).toFixed(0)}%`);
-
+return { age, marketHits, eaten, absorption, spoof };
 }
 
-if(wall.age>=120){
+function scan(symbol) {
+const book = books.get(symbol);
+const zoneData = zones.get(symbol);
 
-score+=15;
-reasons.push("Стена >120с");
+if (!book || !book.valid || !zoneData || !book.last) return;
 
-}else if(wall.age>=30){
-
-score+=10;
-reasons.push("Стена >30с");
-
-}
-
-if(wall.absorption>=0.80){
-
-score+=15;
-reasons.push("Absorption");
-
-}
-
-score+=10;
-reasons.push("Bounce ATR");
-
-score+=10;
-reasons.push("CVD");
-
-// ==============================
-// ЖЕСТКИЙ ФИЛЬТР
-// ==============================
-
-if(score<65){
-
-continue;
-
-}
-
-// ==============================
-// SL / TP
-// ==============================
-
-const mult=zone.tf==="4H"
-?0.50
-:zone.tf==="1H"
-?0.35
-:0.25;
-
-const sl=zone.side==="LONG"
-?cluster.peakPrice-A*mult
-:cluster.peakPrice+A*mult;
-
-const risk=Math.abs(book.last-sl);
-
-const tp1=zone.side==="LONG"
-?book.last+risk*2
-:book.last-risk*2;
-
-const tp2=zone.side==="LONG"
-?book.last+risk*3.5
-:book.last-risk*3.5;
-
-const key=`${symbol}_${zone.side}_${zone.min.toFixed(6)}`;
-
-if(signals.has(key)){
-
-const s=signals.get(key);
-
-s.price=book.last;
-
-s.score=score;
-
-s.coreUsd=cluster.coreUsd;
-
-s.reasons=reasons;
-
-continue;
-
-}
-
-signals.set(key,{
-
-key,
-
-symbol,
-
-side:zone.side,
-
-tf:zone.tf,
-
-score,
-
-price:book.last,
-
-zoneMin:zone.min,
-
-zoneMax:zone.max,
-
-peakPrice:cluster.peakPrice,
-
-coreUsd:cluster.coreUsd,
-
-wallAge:wall.age,
-
-absorption:wall.absorption,
-
-sl,
-
-tp1,
-
-tp2,
-
-reasons,
-
-created:now()
-
+const active = zoneData.zones.filter(z => {
+const tol = z.tf === "4H" ? 0.004 : z.tf === "1H" ? 0.0025 : 0.0015;
+return book.last >= z.min * (1 - tol) && book.last <= z.max * (1 + tol);
 });
 
+if (!active.length) return;
+
+const A = atr(zoneData.k5m);
+
+for (const zone of active) {
+const cooldownKey = `${symbol}_${zone.side}`;
+if (cooldowns.has(cooldownKey) && cooldowns.get(cooldownKey) > now()) continue;
+
+const opposite = zone.side === "LONG" ? "SHORT" : "LONG";
+if ([...signals.values()].some(s => s.symbol === symbol && s.side === opposite)) continue;
+
+const center = zone.side === "LONG" ? zone.min : zone.max;
+const cluster = getPeakCluster(zone.side === "LONG" ? book.bids : book.asks, center, symbol);
+
+if (!cluster) continue;
+
+const wall = analyzeWall(symbol, zone.side, cluster);
+if (wall.spoof) continue;
+
+const bounced = zone.side === "LONG"
+? book.last >= cluster.peakPrice + A * 0.15
+: book.last <= cluster.peakPrice - A * 0.15;
+
+if (!bounced) continue;
+
+let score = 0;
+const reasons = [];
+
+if (zone.tf === "4H") { score += 30; reasons.push("4H зона"); }
+else if (zone.tf === "1H") { score += 20; reasons.push("1H зона"); }
+else { score += 10; reasons.push("15M зона"); }
+
+if (cluster.concentration >= 0.50) { score += 20; reasons.push(`Ядро ${(cluster.concentration*100).toFixed(0)}%`); }
+else { score += 10; reasons.push(`Ядро ${(cluster.concentration*100).toFixed(0)}%`); }
+
+if (wall.age >= 120) { score += 15; reasons.push("Стена >120с"); }
+else if (wall.age >= 30) { score += 10; reasons.push("Стена >30с"); }
+
+if (wall.absorption >= 0.80) { score += 15; reasons.push("Absorption"); }
+score += 10; reasons.push("Bounce ATR");
+
+if (score < 65) continue;
+
+// Защита от слишком узкого SL: минимум 0.3% от цены для перекрытия комиссий и спреда
+const minBuffer = book.last * 0.003;
+const slDistance = Math.max(A * 1.5, minBuffer);
+
+const sl = zone.side === "LONG" ? cluster.peakPrice - slDistance : cluster.peakPrice + slDistance;
+const risk = Math.abs(book.last - sl);
+
+const tp1 = zone.side === "LONG" ? book.last + risk * 2 : book.last - risk * 2;
+const tp2 = zone.side === "LONG" ? book.last + risk * 3.5 : book.last - risk * 3.5;
+
+const key = `${symbol}_${zone.side}_${zone.min.toFixed(6)}`;
+
+if (signals.has(key)) {
+const s = signals.get(key);
+s.price = book.last;
+s.score = score;
+s.coreUsd = cluster.coreUsd;
+s.reasons = reasons;
+continue;
+}
+
+signals.set(key, {
+key, symbol, side: zone.side, tf: zone.tf, score,
+price: book.last, zoneMin: zone.min, zoneMax: zone.max,
+peakPrice: cluster.peakPrice, coreUsd: cluster.coreUsd,
+wallAge: wall.age, absorption: wall.absorption,
+sl, tp1, tp2, reasons, created: now()
+});
 }
 
 render();
-
-}
-  // ==========================================================
-// SIGNAL MANAGER v11
-// ==========================================================
-
-function startSignalManager(){
-
-if(managerTimer)clearInterval(managerTimer);
-
-managerTimer=setInterval(()=>{
-
-if(!run)return;
-
-const current=now();
-
-let changed=false;
-
-// --------------------
-// очищаем cooldown
-// --------------------
-
-for(const[key,time]of cooldowns){
-
-if(current>time){
-
-cooldowns.delete(key);
-
-}
-
-}
-
-// --------------------
-// очищаем старые стены
-// --------------------
-
-for(const[key,wall]of wallHistory){
-
-if(current-wall.lastSeen>180000){
-
-wallHistory.delete(key);
-
-}
-
-}
-
-// --------------------
-// сопровождаем сигналы
-// --------------------
-
-for(const[key,sig]of signals){
-
-const book=books.get(sig.symbol);
-
-if(!book||!book.last){
-
-continue;
-
-}
-
-// ---------- TTL ----------
-
-if(current-sig.created>SIGNAL_TTL){
-
-signals.delete(key);
-
-changed=true;
-
-continue;
-
-}
-
-// ---------- проверка зоны ----------
-
-const zoneCenter=(sig.zoneMin+sig.zoneMax)/2;
-
-const zoneDist=Math.abs(book.last-zoneCenter)/zoneCenter;
-
-if(zoneDist>0.012){
-
-signals.delete(key);
-
-cooldowns.set(
-
-`${sig.symbol}_${sig.side}`,
-
-current+45000
-
-);
-
-changed=true;
-
-continue;
-
-}
-
-// ---------- проверяем кластер ----------
-
-const cluster=getPeakCluster(
-
-sig.side==="LONG"
-?book.bids
-:book.asks,
-
-sig.peakPrice,
-
-sig.symbol
-
-);
-
-if(!cluster){
-
-signals.delete(key);
-
-changed=true;
-
-continue;
-
-}
-
-// ---------- разрушение ядра ----------
-
-if(cluster.coreUsd<sig.coreUsd*0.35){
-
-signals.delete(key);
-
-cooldowns.set(
-
-`${sig.symbol}_${sig.side}`,
-
-current+60000
-
-);
-
-changed=true;
-
-continue;
-
-}
-
-// ---------- сопровождение ----------
-
-const A=atr(zones.get(sig.symbol)?.k5m);
-
-if(!A)continue;
-
-if(sig.side==="LONG"){
-
-if(book.last>=sig.price+A*0.40){
-
-if(sig.state!=="HOLD"){
-
-sig.state="HOLD";
-
-sig.reasons=[...sig.reasons,"Уровень удержался"];
-
-changed=true;
-
-}
-
-}
-
-if(book.last<sig.peakPrice-A*0.25){
-
-sig.state="BROKEN";
-
-signals.delete(key);
-
-cooldowns.set(
-
-`${sig.symbol}_${sig.side}`,
-
-current+90000
-
-);
-
-changed=true;
-
-continue;
-
-}
-
-}else{
-
-if(book.last<=sig.price-A*0.40){
-
-if(sig.state!=="HOLD"){
-
-sig.state="HOLD";
-
-sig.reasons=[...sig.reasons,"Сопротивление удержалось"];
-
-changed=true;
-
-}
-
-}
-
-if(book.last>sig.peakPrice+A*0.25){
-
-sig.state="BROKEN";
-
-signals.delete(key);
-
-cooldowns.set(
-
-`${sig.symbol}_${sig.side}`,
-
-current+90000
-
-);
-
-changed=true;
-
-continue;
-
-}
-
-}
-
-// ---------- обновляем метрики ----------
-
-sig.price=book.last;
-
-sig.coreUsd=cluster.coreUsd;
-
-sig.wallAge=Math.round(analyzeWall(
-
-sig.symbol,
-
-sig.side,
-
-cluster
-
-).age);
-
-}
-
-if(changed){
-
-render();
-
-}
-
-},1000);
-
 }
 
 // ==========================================================
-// BACKGROUND JOBS
+// МЕНЕДЖЕР СИГНАЛОВ И РЕНДЕР UI
 // ==========================================================
 
-function startBackgroundJobs(){
+function startSignalManager() {
+if (managerTimer) clearInterval(managerTimer);
+managerTimer = setInterval(() => {
+if (!run) return;
+const current = now();
+let changed = false;
 
+for (const [key, time] of cooldowns) {
+if (current > time) cooldowns.delete(key);
+}
+
+for (const [key, wall] of wallHistory) {
+if (current - wall.lastSeen > 180000) wallHistory.delete(key);
+}
+
+for (const [key, sig] of signals) {
+const book = books.get(sig.symbol);
+if (!book || !book.last) continue;
+
+if (current - sig.created > SIGNAL_TTL) {
+signals.delete(key);
+changed = true;
+continue;
+}
+
+const cluster = getPeakCluster(sig.side === "LONG" ? book.bids : book.asks, sig.peakPrice, sig.symbol);
+if (!cluster || cluster.coreUsd < sig.coreUsd * 0.35) {
+signals.delete(key);
+cooldowns.set(`${sig.symbol}_${sig.side}`, current + 60000);
+changed = true;
+continue;
+}
+
+sig.price = book.last;
+sig.coreUsd = cluster.coreUsd;
+}
+
+if (changed) render();
+}, 1000);
+}
+
+function startBackgroundJobs() {
 startWatchdog();
-
 startSignalManager();
-
 startDebounceEngine();
 
-if(swingRefreshTimer)clearInterval(swingRefreshTimer);
-
-swingRefreshTimer=setInterval(async()=>{
-
-if(!run)return;
-
-for(const s of symbols){
-
+if (swingRefreshTimer) clearInterval(swingRefreshTimer);
+swingRefreshTimer = setInterval(async () => {
+if (!run) return;
+for (const s of symbols) {
 await loadSwings(s);
-
-await new Promise(r=>setTimeout(r,15));
-
+await new Promise(r => setTimeout(r, 50));
+}
+}, 300000);
 }
 
-},300000);
-
+function playSignalSound() {
+try {
+if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+if (audioCtx.state === "suspended") audioCtx.resume();
+const osc = audioCtx.createOscillator();
+const gain = audioCtx.createGain();
+osc.connect(gain);
+gain.connect(audioCtx.destination);
+osc.frequency.value = 880;
+gain.gain.value = 0.12;
+osc.start();
+osc.stop(audioCtx.currentTime + 0.12);
+} catch(e) {}
 }
-  // ==========================================================
-// RENDER v11
-// ==========================================================
 
-function render(){
+let lastSignalCount = 0;
 
-if(!signals.size){
+function render() {
+if (signals.size > lastSignalCount) playSignalSound();
+lastSignalCount = signals.size;
 
-S.innerHTML=`
+if (!signals.size) {
+S.innerHTML = `
 <div style="color:#8f98a5;padding:30px;text-align:center">
 Мониторинг институциональных зон и стакана.<br>
 Ожидание подтверждённых сетапов...
-</div>
-`;
-
+</div>`;
 return;
-
 }
 
-const list=[...signals.values()]
-.sort((a,b)=>b.score-a.score||b.created-a.created)
-.slice(0,15);
+const list = [...signals.values()]
+.sort((a, b) => b.score - a.score || b.created - a.created)
+.slice(0, 15);
 
-S.innerHTML=list.map(sig=>{
+S.innerHTML = list.map(sig => {
+const scoreClass = sig.score >= 80 ? "high" : sig.score >= 65 ? "mid" : "low";
+const sideColor = sig.side === "LONG" ? "#0ecb81" : "#f6465d";
+const rr = Math.abs(sig.tp1 - sig.price) / Math.max(0.0001, Math.abs(sig.price - sig.sl));
+const age = Math.floor((now() - sig.created) / 1000);
 
-const scoreClass=sig.score>=80
-?"high"
-:sig.score>=65
-?"mid"
-:"low";
-
-const sideColor=sig.side==="LONG"
-?"#0ecb81"
-:"#f6465d";
-
-const state=sig.state||"ENTRY";
-
-const rr=Math.abs(sig.tp1-sig.price)/Math.abs(sig.price-sig.sl);
-
-const age=Math.floor((now()-sig.created)/1000);
-
-return`
-
-<div class="card ${sig.side==="SHORT"?"short":""}">
-
+return `
+<div class="card ${sig.side === "SHORT" ? "short" : ""}">
 <div class="card-head">
-
 <div>
-
 <div style="font-size:16px;font-weight:800">${sig.symbol}</div>
-
-<div style="color:${sideColor};font-weight:700">
-
-${sig.side} · ${state} · ${sig.tf}
-
+<div style="color:${sideColor};font-weight:700">${sig.side} · ENTRY · ${sig.tf}</div>
 </div>
-
+<div class="score ${scoreClass}">${sig.score}/100</div>
 </div>
-
-<div class="score ${scoreClass}">
-
-${sig.score}/100
-
-</div>
-
-</div>
-
 <div class="grid">
-
-<div class="box">
-
-Вход
-
-<b>${pf(sig.price)}</b>
-
+<div class="box">Вход<b>${pf(sig.price)}</b></div>
+<div class="box">Peak<b>${pf(sig.peakPrice)}</b></div>
+<div class="box">SL<b>${pf(sig.sl)}</b></div>
+<div class="box">TP1<b>${pf(sig.tp1)}</b></div>
+<div class="box">TP2<b>${pf(sig.tp2)}</b></div>
 </div>
-
-<div class="box">
-
-Peak
-
-<b>${pf(sig.peakPrice)}</b>
-
-</div>
-
-<div class="box">
-
-SL
-
-<b>${pf(sig.sl)}</b>
-
-</div>
-
-<div class="box">
-
-TP1
-
-<b>${pf(sig.tp1)}</b>
-
-</div>
-
-<div class="box">
-
-TP2
-
-<b>${pf(sig.tp2)}</b>
-
-</div>
-
-</div>
-
 <div class="grid">
-
-<div class="box">
-
-Ядро
-
-<b>$${Math.round(sig.coreUsd).toLocaleString()}</b>
-
+<div class="box">Ядро<b>$${Math.round(sig.coreUsd).toLocaleString()}</b></div>
+<div class="box">Absorption<b>${(sig.absorption || 0).toFixed(2)}</b></div>
+<div class="box">Стена<b>${Math.round(sig.wallAge || 0)} c</b></div>
+<div class="box">Риск<b>${((Math.abs(sig.price - sig.sl) / sig.price) * 100).toFixed(2)}%</b></div>
+<div class="box">R:R<b>${rr.toFixed(2)}</b></div>
 </div>
-
-<div class="box">
-
-Absorption
-
-<b>${(sig.absorption||0).toFixed(2)}</b>
-
-</div>
-
-<div class="box">
-
-Стена
-
-<b>${Math.round(sig.wallAge||0)} c</b>
-
-</div>
-
-<div class="box">
-
-Риск
-
-<b>${((Math.abs(sig.price-sig.sl)/sig.price)*100).toFixed(2)}%</b>
-
-</div>
-
-<div class="box">
-
-R:R
-
-<b>${rr.toFixed(2)}</b>
-
-</div>
-
-</div>
-
 <div class="tags">
-
-${sig.reasons.map(x=>`
-<span class="tag">✔ ${x}</span>
-`).join("")}
-
+${sig.reasons.map(x => `<span class="tag">✔ ${x}</span>`).join("")}
 </div>
-
 <div class="info">
-
 <span>Возраст сигнала: ${age} сек</span>
-
-<span>${sig.zoneMin?`${pf(sig.zoneMin)}–${pf(sig.zoneMax)}`:"HTF Zone"}</span>
-
+<span>${sig.zoneMin ? `${pf(sig.zoneMin)}–${pf(sig.zoneMax)}` : "HTF Zone"}</span>
 </div>
-
-</div>
-
-`;
-
+</div>`;
 }).join("");
-
 }
-  // ==========================================================
-// STOP ENGINE
-// ==========================================================
 
-function stop(){
-
-run=false;
-
-// ---------- таймеры ----------
-
-[
-pingTimer,
-watchdogTimer,
-managerTimer,
-debounceTimer,
-swingRefreshTimer
-].forEach(t=>{
-
-if(t)clearInterval(t);
-
+function stop() {
+run = false;
+[pingTimer, watchdogTimer, managerTimer, debounceTimer, swingRefreshTimer].forEach(t => {
+if (t) clearInterval(t);
 });
-
-pingTimer=null;
-watchdogTimer=null;
-managerTimer=null;
-debounceTimer=null;
-swingRefreshTimer=null;
-
-// ---------- сокеты ----------
-
+pingTimer = watchdogTimer = managerTimer = debounceTimer = swingRefreshTimer = null;
 closeSockets();
-
-// ---------- очистка очередей ----------
-
 pending.clear();
-
-ST.textContent="Сканер остановлен.";
-
+ST.textContent = "Сканер остановлен.";
 }
 
-// ==========================================================
-// CLEAR SIGNALS
-// ==========================================================
-
-function clearCards(){
-
+function clearCards() {
 signals.clear();
-
+lastSignalCount = 0;
 render();
-
 }
 
-// ==========================================================
-// FULL MEMORY CLEANUP
-// ==========================================================
-
-function hardReset(){
-
-signals.clear();
-books.clear();
-trades.clear();
-wallHistory.clear();
-cooldowns.clear();
-pending.clear();
-
-render();
-
-}
-
-// ==========================================================
-// BEFORE UNLOAD
-// ==========================================================
-
-window.addEventListener("beforeunload",()=>{
-
-stop();
-
-});
-
-// ==========================================================
-// MEMORY GUARD
-// ==========================================================
-
-setInterval(()=>{
-
-if(!run)return;
-
-// ограничиваем историю трейдов
-
-for(const[symbol,arr]of trades){
-
-if(arr.length>500){
-
-trades.set(symbol,arr.slice(-350));
-
-}
-
-}
-
-// ограничиваем историю стен
-
-for(const[key,wall]of wallHistory){
-
-if(now()-wall.lastSeen>300000){
-
-wallHistory.delete(key);
-
-}
-
-}
-
-// удаляем старые книги без данных
-
-for(const[key,book]of books){
-
-if(!book.valid&&now()-lastRx>60000){
-
-books.delete(key);
-
-}
-
-}
-
-},30000);
-
-// ==========================================================
-// SAFE RENDER AFTER RESUME
-// ==========================================================
-
-window.addEventListener("focus",()=>{
-
-if(run){
-
-repairConnection();
-
-}
-
-});
-
-// ==========================================================
-// DIAGNOSTICS
-// ==========================================================
-
-function diagnostics(){
-
-return{
-
-running:run,
-
-websockets:ws.length,
-
-activeSockets:ws.filter(x=>x.readyState===WebSocket.OPEN).length,
-
-books:books.size,
-
-zones:zones.size,
-
-signals:signals.size,
-
-trades:trades.size,
-
-walls:wallHistory.size,
-
-pending:pending.size,
-
-lastDataAgo:now()-lastRx
-
-};
-
-}
-
-// Консольная команда:
-// diagnostics()
-  // ==========================================================
-// FINAL PATCH v11
-// ==========================================================
-
-let instrumentCache = new Map();
-let reconnectLock = false;
-let audioCtx = null;
-
-// ---------- Звук ----------
-
-function playSignalSound(){
-
-try{
-
-if(!audioCtx){
-
-audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-
-}
-
-if(audioCtx.state==="suspended"){
-
-audioCtx.resume();
-
-}
-
-const osc=audioCtx.createOscillator();
-const gain=audioCtx.createGain();
-
-osc.connect(gain);
-gain.connect(audioCtx.destination);
-
-osc.frequency.value=880;
-gain.gain.value=0.12;
-
-osc.start();
-osc.stop(audioCtx.currentTime+0.12);
-
-}catch(e){}
-
-}
-
-// ---------- Настоящий tickSize ----------
-
-async function loadInstrumentInfo(){
-
-try{
-
-const r=await fetch("https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000");
-
-const j=await r.json();
-
-(j.result?.list||[]).forEach(i=>{
-
-instrumentCache.set(i.symbol,{
-
-tickSize:+(i.priceFilter?.tickSize||0.0001),
-
-qtyStep:+(i.lotSizeFilter?.qtyStep||0.001)
-
-});
-
-const old=metrics.get(i.symbol);
-
-if(old){
-
-old.tickSize=+(i.priceFilter?.tickSize||0.0001);
-
-}
-
-});
-
-}catch(e){}
-
-}
-
-// ---------- Patch start() ----------
-
-const _oldStart=start;
-
-start=async function(){
-
-await loadInstrumentInfo();
-
-return _oldStart();
-
-};
-
-// ---------- Защита реконнекта ----------
-
-const _repair=repairConnection;
-
-repairConnection=function(){
-
-if(reconnectLock)return;
-
-reconnectLock=true;
-
-Promise.resolve(_repair()).finally(()=>{
-
-setTimeout(()=>{
-
-reconnectLock=false;
-
-},1000);
-
-});
-
-};
-
-// ---------- Статус ----------
-
-function updateStatus(){
-
-if(!run)return;
-
-const alive=ws.filter(x=>x.readyState===WebSocket.OPEN).length;
-
-const lag=Math.max(0,Math.floor((now()-lastRx)/1000));
-
-ST.textContent=`WS ${alive}/${Math.ceil(symbols.length/20)} · Монет ${symbols.length}/${TOP} · Лаг ${lag}с`;
-
-}
-
-setInterval(updateStatus,1000);
-
-// ---------- Новый сигнал ----------
-
-const _render=render;
-
-render=function(){
-
-const before=signals.size;
-
-_render();
-
-const after=signals.size;
-
-if(after>before){
-
-playSignalSound();
-
-}
-
-};
-
-// ---------- Финальная очистка ----------
-
-window.addEventListener("pagehide",()=>{
-
-stop();
-
-});
-
+setInterval(() => {
+if (!run) return;
+const alive = ws.filter(x => x.readyState === WebSocket.OPEN).length;
+const lag = Math.max(0, Math.floor((now() - lastRx) / 1000));
+ST.textContent = `WS ${alive}/${Math.ceil(symbols.length / 20)} · Монет ${symbols.length}/${TOP} · Лаг ${lag}с`;
+}, 1000);
+
+window.addEventListener("beforeunload", () => { stop(); });
 </script>
 </body>
 </html>
