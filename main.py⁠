@@ -1,0 +1,106 @@
+import ccxt
+import os
+import requests
+import time
+
+# Получаем данные из секретов GitHub Actions
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
+
+def send_telegram_message(message):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram секреты не настроены!")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
+    try:
+        requests.post(url, json=payload)
+    except Exception as e:
+        print(f"Ошибка отправки в Telegram: {e}")
+
+# Инициализация бирж
+exchange_ids = ['bybit', 'mexc', 'okx', 'weex', 'bingx', 'bitget', 'gate', 'kucoin']
+exchanges = {}
+
+print("Подключаемся к биржам...")
+for ex_id in exchange_ids:
+    try:
+        exchange_class = getattr(ccxt, ex_id)
+        exchanges[ex_id] = exchange_class({'enableRateLimit': True})
+    except Exception as e:
+        print(f"Ошибка подключения к {ex_id}: {e}")
+
+INITIAL_BALANCE = 100.0  # Депозит 100$
+MIN_SPREAD_PCT = 3.0     # Мин. спред 3%
+ESTIMATED_FEE_PCT = 0.2  # Торговые комиссии
+ESTIMATED_TRANSFER_FEE = 1.0  # Комиссия за вывод USDT (например, сеть TRC-20)
+
+def scan_market():
+    print("Запуск сканирования рынка...")
+    market_data = {}
+    
+    for ex_id, ex in exchanges.items():
+        print(f"Сканируем биржу: {ex_id}...")
+        try:
+            tickers = ex.fetch_tickers()
+            for symbol, ticker in tickers.items():
+                if '/USDT' in symbol and ticker.get('ask') and ticker.get('bid'):
+                    if symbol not in market_data:
+                        market_data[symbol] = {}
+                    market_data[symbol][ex_id] = {
+                        'ask': ticker['ask'],
+                        'bid': ticker['bid']
+                    }
+        except Exception as e:
+            print(f"Ошибка получения данных с {ex_id}: {e}")
+        time.sleep(1)
+
+    signal_count = 0
+    for symbol, ex_prices in market_data.items():
+        if len(ex_prices) < 2:
+            continue
+            
+        best_buy_ex = min(ex_prices, key=lambda x: ex_prices[x]['ask'])
+        best_sell_ex = max(ex_prices, key=lambda x: ex_prices[x]['bid'])
+        
+        if best_buy_ex == best_sell_ex:
+            continue
+            
+        buy_price = ex_prices[best_buy_ex]['ask']
+        sell_price = ex_prices[best_sell_ex]['bid']
+        
+        if buy_price <= 0:
+            continue
+            
+        spread_pct = ((sell_price - buy_price) / buy_price) * 100
+        
+        if spread_pct >= MIN_SPREAD_PCT:
+            signal_count += 1
+            coin_amount = INITIAL_BALANCE / buy_price
+            gross_return = coin_amount * sell_price
+            gross_profit = gross_return - INITIAL_BALANCE
+            
+            trading_fees_usd = INITIAL_BALANCE * (ESTIMATED_FEE_PCT / 100)
+            net_profit = gross_profit - trading_fees_usd - ESTIMATED_TRANSFER_FEE
+            
+            msg = (
+                f"🚨 *АРБИТРАЖНЫЙ СИГНАЛ #{signal_count}*\n\n"
+                f"🪙 *Монета:* `{symbol}`\n"
+                f"📥 *Купить на:* `{best_buy_ex.upper()` по `{buy_price}`\n"
+                f"📤 *Продать на:* `{best_sell_ex.upper()` по `{sell_price}`\n"
+                f"📈 *Спред:* `+{spread_pct:.2f}%`\n"
+                f"💵 *Депозит:* `${INITIAL_BALANCE}`\n"
+                f"💰 *Чистая прибыль (с комиссией):* `+${net_profit:.2f}`"
+            )
+            print(msg)
+            send_telegram_message(msg)
+
+    if signal_count == 0:
+        print("Связок со спредом >3% не найдено.")
+
+if __name__ == "__main__":
+    scan_market()
